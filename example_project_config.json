@@ -1,16 +1,16 @@
 {
   "version": "1.0.0",
-  "project_name": "SWA",
-  "description": "SWA TV Series Production",
-  
+  "project_name": "PROJECT",
+  "description": "Example Project Configuration",
+
   "roots": {
     "PROJ_ROOT": "V:/",
     "IMG_ROOT": "W:/",
-    "CACHE_ROOT": "V:/SWA/temp"
+    "CACHE_ROOT": "V:/PROJECT/temp"
   },
-  
+
   "defaults": {
-    "project": "SWA",
+    "project": "PROJECT",
     "version": "v001",
     "variance": "main",
     "element": "beauty",
@@ -71,9 +71,9 @@
   },
   
   "custom_variables": {
-    "show_code": "SWA",
+    "show_code": "PROJ",
     "season": "01",
-    "client": "Netflix",
+    "client": "Client Name",
     "resolution": "2048x1152"
   }
 }

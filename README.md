@@ -8,7 +8,7 @@ Production-ready multishot workflow system for Nuke that provides variable-drive
 - **PRD-Compliant**: Follows the exact directory structure specified in the PRD
 - **Context-Aware**: Auto-detects project context from file paths and names
 - **Farm Compatible**: Variables embedded in Nuke scripts for render farm compatibility
-- **Real Production Paths**: Works with your actual V:/SWA/all/scene/ directory structure
+- **Flexible Path Structure**: Works with your production directory structure
 
 ## Installation
 
@@ -50,15 +50,15 @@ Production-ready multishot workflow system for Nuke that provides variable-drive
 The system expects this directory structure:
 
 ```
-V:/SWA/all/scene/Ep01/sq0110/SH0520/comp/version/Ep01_sq0110_SH0520_comp_v001.nk
-W:/SWA/all/scene/Ep01/sq0090/SH0450/lighting/publish/v005/MASTER_ATMOS_A/MASTER_ATMOS_A.1001.exr
-V:/SWA/all/scene/Ep01/sq0090/SH0450/anim/publish/v004/geometry.abc
+V:/PROJECT/all/scene/Ep01/sq0010/SH0010/comp/version/Ep01_sq0010_SH0010_comp_v001.nk
+W:/PROJECT/all/scene/Ep01/sq0010/SH0010/lighting/publish/v001/LAYER_NAME/LAYER_NAME.1001.exr
+V:/PROJECT/all/scene/Ep01/sq0010/SH0010/anim/publish/v001/geometry.abc
 ```
 
 ## File Naming Convention
 
 - **Nuke Files**: `{ep}_{seq}_{shot}_{department}_{variance}_{version}.nk`
-- **Example**: `Ep01_sq0110_SH0520_comp_v001.nk`
+- **Example**: `Ep01_sq0010_SH0010_comp_v001.nk`
 
 ## Variables
 
@@ -67,10 +67,10 @@ V:/SWA/all/scene/Ep01/sq0090/SH0450/anim/publish/v004/geometry.abc
 - `IMG_ROOT = W:/` - Image/render root path
 
 ### Hierarchical Variables
-- `{project}` - Project name (e.g., "SWA")
+- `{project}` - Project name (e.g., "PROJECT")
 - `{ep}` - Episode (e.g., "Ep01")
-- `{seq}` - Sequence (e.g., "sq0110")
-- `{shot}` - Shot (e.g., "SH0520")
+- `{seq}` - Sequence (e.g., "sq0010")
+- `{shot}` - Shot (e.g., "SH0010")
 - `{department}` - Department (auto-detected)
 - `{variance}` - Optional variation
 - `{version}` - Version number
@@ -105,7 +105,7 @@ V:/SWA/all/scene/Ep01/sq0090/SH0450/anim/publish/v004/geometry.abc
 ## Troubleshooting
 
 ### Empty Dropdowns
-- Verify V:/SWA/all/scene/ exists and is accessible
+- Verify your project root path exists and is accessible
 - Check network drive permissions
 - Ensure directory structure follows PRD specification
 
