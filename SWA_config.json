@@ -1,0 +1,79 @@
+{
+  "version": "1.0.0",
+  "project_name": "SWA",
+  "description": "SWA TV Series Production",
+  
+  "roots": {
+    "PROJ_ROOT": "V:/",
+    "IMG_ROOT": "W:/",
+    "CACHE_ROOT": "V:/SWA/temp"
+  },
+  
+  "defaults": {
+    "project": "SWA",
+    "version": "v001",
+    "variance": "main",
+    "element": "beauty",
+    "frame": "####",
+    "ext": "exr"
+  },
+  
+
+  
+  "asset_types": {
+    "image": [".exr", ".png", ".jpg", ".jpeg", ".tiff", ".tif", ".dpx"],
+    "geometry": [".abc", ".obj", ".fbx", ".usd", ".usda", ".usdc"],
+    "camera": [".abc", ".fbx", ".ma", ".mb"]
+  },
+  
+  "version_formats": ["v###", "v###_###"],
+  
+  "naming_convention": {
+    "nuke_file": "{ep}_{seq}_{shot}_comp_{version}.nk",
+    "comp_render": "{ep}_{seq}_{shot}_comp.{frame}.{ext}",
+    "comp_movie": "{ep}_{seq}_{shot}_comp.mov",
+    "comp_movie_colorspace": "{ep}_{seq}_{shot}_comp_{colorspace}.mov",
+    "department_render": "{element}.{frame}.{ext}",
+    "geometry": "{element}.{ext}",
+    "camera": "{element}.{ext}"
+  },
+  
+  "paths": {
+    "nuke_files": "{PROJ_ROOT}{project}/all/scene/{ep}/{seq}/{shot}/comp/version/",
+    "comp_renders": "{IMG_ROOT}{project}/all/scene/{ep}/{seq}/{shot}/comp/version/",
+    "comp_renders_versioned": "{IMG_ROOT}{project}/all/scene/{ep}/{seq}/{shot}/comp/version/{version}/",
+    "department_renders": "{IMG_ROOT}{project}/all/scene/{ep}/{seq}/{shot}/{department}/publish/",
+    "department_renders_versioned": "{IMG_ROOT}{project}/all/scene/{ep}/{seq}/{shot}/{department}/publish/{version}/",
+    "geometry": "{PROJ_ROOT}{project}/all/scene/{ep}/{seq}/{shot}/{department}/publish/",
+    "geometry_versioned": "{PROJ_ROOT}{project}/all/scene/{ep}/{seq}/{shot}/{department}/publish/{version}/",
+    "camera": "{PROJ_ROOT}{project}/all/scene/{ep}/{seq}/{shot}/{department}/publish/",
+    "camera_versioned": "{PROJ_ROOT}{project}/all/scene/{ep}/{seq}/{shot}/{department}/publish/{version}/"
+  },
+  
+  "ui": {
+    "cache_timeout": 300,
+    "max_recent_projects": 10,
+    "auto_refresh": true,
+    "show_approval_status": true,
+    "default_department": "comp"
+  },
+  
+  "patterns": {
+    "episode": "^Ep\\d{2}$",
+    "sequence": "^sq\\d{4}$",
+    "shot": "^SH\\d{4}$"
+  },
+  
+  "farm": {
+    "submit_command": "qsub",
+    "queue_name": "comp",
+    "priority": 50
+  },
+  
+  "custom_variables": {
+    "show_code": "SWA",
+    "season": "01",
+    "client": "Netflix",
+    "resolution": "2048x1152"
+  }
+}

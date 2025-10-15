@@ -1,0 +1,76 @@
+{
+  "version": "1.0.0",
+  "project_name": "TestProject",
+  "description": "Test Project for Development",
+  
+  "roots": {
+    "PROJ_ROOT": "T:/pipeline/development/nuke/nukemultishot/test_data/",
+    "IMG_ROOT": "T:/pipeline/development/nuke/nukemultishot/test_renders/",
+    "CACHE_ROOT": "T:/temp/TestProject/"
+  },
+  
+  "defaults": {
+    "project": "TestProject",
+    "version": "v001",
+    "variance": "main",
+    "element": "beauty",
+    "frame": "####",
+    "ext": "exr",
+    "ep": "Ep01",
+    "seq": "sq0110",
+    "shot": "SH0520",
+    "department": "comp"
+  },
+  
+
+  
+  "asset_types": {
+    "image": [".exr", ".png", ".jpg", ".jpeg", ".tiff", ".dpx"],
+    "geometry": [".abc", ".obj", ".fbx", ".usd"],
+    "camera": [".abc", ".fbx"]
+  },
+  
+  "version_formats": ["v###", "v###_###"],
+  
+  "naming_convention": {
+    "nuke_file": "{ep}_{seq}_{shot}_comp_{version}.nk",
+    "comp_render": "{ep}_{seq}_{shot}_comp.{frame}.{ext}",
+    "comp_movie": "{ep}_{seq}_{shot}_comp.mov",
+    "comp_movie_colorspace": "{ep}_{seq}_{shot}_comp_{colorspace}.mov",
+    "department_render": "{element}.{frame}.{ext}",
+    "geometry": "{element}.{ext}",
+    "camera": "{element}.{ext}"
+  },
+  
+  "paths": {
+    "nuke_files": "{PROJ_ROOT}scene/{ep}/{seq}/{shot}/comp/version/",
+    "comp_renders": "{IMG_ROOT}{project}/all/scene/{ep}/{seq}/{shot}/comp/version/",
+    "comp_renders_versioned": "{IMG_ROOT}{project}/all/scene/{ep}/{seq}/{shot}/comp/version/{version}/",
+    "department_renders": "{IMG_ROOT}scene/{ep}/{seq}/{shot}/{department}/publish/",
+    "department_renders_versioned": "{IMG_ROOT}scene/{ep}/{seq}/{shot}/{department}/publish/{version}/",
+    "geometry": "{PROJ_ROOT}scene/{ep}/{seq}/{shot}/{department}/publish/",
+    "geometry_versioned": "{PROJ_ROOT}scene/{ep}/{seq}/{shot}/{department}/publish/{version}/",
+    "camera": "{PROJ_ROOT}scene/{ep}/{seq}/{shot}/{department}/publish/",
+    "camera_versioned": "{PROJ_ROOT}scene/{ep}/{seq}/{shot}/{department}/publish/{version}/"
+  },
+  
+  "ui": {
+    "cache_timeout": 60,
+    "max_recent_projects": 5,
+    "auto_refresh": true,
+    "show_approval_status": false,
+    "default_department": "comp"
+  },
+  
+  "patterns": {
+    "episode": "^Ep\\d{2}$",
+    "sequence": "^sq\\d{4}$",
+    "shot": "^SH\\d{4}$"
+  },
+  
+  "custom_variables": {
+    "show_code": "TEST",
+    "client": "Internal",
+    "resolution": "1920x1080"
+  }
+}
