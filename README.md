@@ -50,9 +50,16 @@ Production-ready multishot workflow system for Nuke that provides variable-drive
 The system expects this directory structure:
 
 ```
-V:/PROJECT/all/scene/Ep01/sq0010/SH0010/comp/version/Ep01_sq0010_SH0010_comp_v001.nk
-W:/PROJECT/all/scene/Ep01/sq0010/SH0010/lighting/publish/v001/LAYER_NAME/LAYER_NAME.1001.exr
-V:/PROJECT/all/scene/Ep01/sq0010/SH0010/anim/publish/v001/geometry.abc
+V:/{project}/all/scene/{ep}/{seq}/{shot}/comp/version/{ep}_{seq}_{shot}_comp_v001.nk
+W:/{project}/all/scene/{ep}/{seq}/{shot}/lighting/publish/v001/{layer}/{layer}.1001.exr
+V:/{project}/all/scene/{ep}/{seq}/{shot}/anim/publish/v001/geometry.abc
+```
+
+**Example:**
+```
+V:/MyProject/all/scene/Ep01/sq0010/SH0010/comp/version/Ep01_sq0010_SH0010_comp_v001.nk
+W:/MyProject/all/scene/Ep01/sq0010/SH0010/lighting/publish/v001/beauty/beauty.1001.exr
+V:/MyProject/all/scene/Ep01/sq0010/SH0010/anim/publish/v001/geometry.abc
 ```
 
 ## File Naming Convention
