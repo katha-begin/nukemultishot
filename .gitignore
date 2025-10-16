@@ -47,6 +47,7 @@ FIX_*.md
 ENHANCED_*.md
 GIZMO_*.md
 MULTISHOT_WRITE_*.md
+PRD/
 
 # Nuke temporary files
 *.autosave
@@ -65,4 +66,8 @@ __pycache__/
 # Test and temporary files
 reload_and_test_nodes.py
 debug_*.py
+
+# PRD and internal documentation
+PRD/
+*PRD*.md
 
