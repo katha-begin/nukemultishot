@@ -13,9 +13,14 @@ Features:
 """
 
 import os
-import nuke
 from typing import List, Dict, Optional
-from ..utils.logger import get_logger
+from .logging import get_logger
+
+try:
+    import nuke
+    NUKE_AVAILABLE = True
+except ImportError:
+    NUKE_AVAILABLE = False
 
 
 class GizmoLoader:
@@ -177,62 +182,70 @@ class GizmoLoader:
     def register_gizmo(self, gizmo_info: Dict[str, str], menu_path: str):
         """
         Register a single gizmo to Nuke menu.
-        
+
         Args:
             gizmo_info: Dictionary with 'name', 'path', 'category'
             menu_path: Base menu path (e.g., 'Multishot/Gizmos')
         """
+        if not NUKE_AVAILABLE:
+            self.logger.warning("Nuke not available, cannot register gizmo")
+            return
+
         try:
             name = gizmo_info['name']
             path = gizmo_info['path']
             category = gizmo_info['category']
-            
+
             # Build full menu path
             if category and category != 'Uncategorized':
                 full_menu_path = f"{menu_path}/{category}/{name}"
             else:
                 full_menu_path = f"{menu_path}/{name}"
-            
+
             # Create menu command
             command = f"nuke.createNode('{path}')"
-            
+
             # Add to Nuke menu
             nuke.menu('Nodes').addCommand(full_menu_path, command)
-            
+
             self.loaded_gizmos.append(gizmo_info)
             self.logger.debug(f"Registered gizmo: {full_menu_path}")
-            
+
         except Exception as e:
             self.logger.error(f"Error registering gizmo {gizmo_info.get('name', 'unknown')}: {e}")
     
     def register_toolset(self, toolset_info: Dict[str, str], menu_path: str):
         """
         Register a single toolset to Nuke menu.
-        
+
         Args:
             toolset_info: Dictionary with 'name', 'path', 'category'
             menu_path: Base menu path (e.g., 'Multishot/Toolsets')
         """
+        if not NUKE_AVAILABLE:
+            self.logger.warning("Nuke not available, cannot register toolset")
+            return
+
         try:
             name = toolset_info['name']
             path = toolset_info['path']
             category = toolset_info['category']
-            
+
             # Build full menu path
             if category and category != 'Uncategorized':
                 full_menu_path = f"{menu_path}/{category}/{name}"
             else:
                 full_menu_path = f"{menu_path}/{name}"
-            
+
             # Create menu command to load toolset
             command = f"nuke.nodePaste('{path}')"
-            
+
             # Add to Nuke menu
             nuke.menu('Nodes').addCommand(full_menu_path, command)
-            
+
             self.loaded_toolsets.append(toolset_info)
             self.logger.debug(f"Registered toolset: {full_menu_path}")
-            
+
         except Exception as e:
             self.logger.error(f"Error registering toolset {toolset_info.get('name', 'unknown')}: {e}")
     
