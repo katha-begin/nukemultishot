@@ -333,14 +333,14 @@ if instance:
 
             # Build EXR path
             exr_template = (
-                '[value root.IMG_ROOT][value root.project]/all/scene/'
+                '[value root.IMG_ROOT]/[value root.project]/all/scene/'
                 '[value root.ep]/[value root.seq]/[value root.shot]/'
                 f'{department}/version/{version}/{layer}.%04d.exr'
             )
 
             # Build MOV path
             mov_template = (
-                '[value root.IMG_ROOT][value root.project]/all/scene/'
+                '[value root.IMG_ROOT]/[value root.project]/all/scene/'
                 '[value root.ep]/[value root.seq]/[value root.shot]/'
                 f'{department}/version/{version}/{layer}.mov'
             )

@@ -288,7 +288,7 @@ class MultishotWrite:
 
             # Path template
             path_template = nuke.String_Knob('path_template', 'Path Template')
-            path_template.setValue('[value root.IMG_ROOT][value root.project]/all/scene/[value root.ep]/[value root.seq]/[value root.shot]/comp/version/{version}/{layer}.%04d.exr')
+            path_template.setValue('[value root.IMG_ROOT]/[value root.project]/all/scene/[value root.ep]/[value root.seq]/[value root.shot]/comp/version/{version}/{layer}.%04d.exr')
             path_template.setTooltip('Template for output path resolution')
             self.node.addKnob(path_template)
             self.knobs['path_template'] = path_template
@@ -471,13 +471,13 @@ if hasattr(write_node_module, '_node_instances'):
 
             if output_type == 'comp_render':
                 # Comp renders go to comp/version/
-                template = '[value root.IMG_ROOT][value root.project]/all/scene/[value root.ep]/[value root.seq]/[value root.shot]/comp/version/{version}/{layer}.%04d.exr'
+                template = '[value root.IMG_ROOT]/[value root.project]/all/scene/[value root.ep]/[value root.seq]/[value root.shot]/comp/version/{version}/{layer}.%04d.exr'
             elif output_type == 'dept_render':
                 # Department renders go to dept/publish/version/
-                template = '[value root.IMG_ROOT][value root.project]/all/scene/[value root.ep]/[value root.seq]/[value root.shot]/{department}/publish/{version}/{layer}.%04d.exr'
+                template = '[value root.IMG_ROOT]/[value root.project]/all/scene/[value root.ep]/[value root.seq]/[value root.shot]/{department}/publish/{version}/{layer}.%04d.exr'
             elif output_type == 'geometry':
                 # Geometry goes to dept/publish/version/
-                template = '[value root.PROJ_ROOT][value root.project]/all/scene/[value root.ep]/[value root.seq]/[value root.shot]/{department}/publish/{version}/{layer}.abc'
+                template = '[value root.PROJ_ROOT]/[value root.project]/all/scene/[value root.ep]/[value root.seq]/[value root.shot]/{department}/publish/{version}/{layer}.abc'
             else:
                 return
 
