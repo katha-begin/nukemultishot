@@ -9,6 +9,7 @@ from .config import ConfigManager
 from .logging import get_logger, setup_logging
 from .version import VersionManager, parse_version
 from .approval import ApprovalManager
+from .gizmo_loader import GizmoLoader, load_gizmos_and_toolsets
 
 __all__ = [
     'ConfigManager',
@@ -16,5 +17,7 @@ __all__ = [
     'setup_logging',
     'VersionManager',
     'parse_version',
-    'ApprovalManager'
+    'ApprovalManager',
+    'GizmoLoader',
+    'load_gizmos_and_toolsets'
 ]

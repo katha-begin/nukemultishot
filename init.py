@@ -30,6 +30,17 @@ def initialize_multishot():
             print("   - Menu: Multishot > Browser")
             print("   - Toolbar: Look for 'Multishot' in the toolbar")
             print("   - Shortcuts: Ctrl+Shift+M (Browser), F5 (Refresh Context)")
+
+            # Load gizmos and toolsets
+            try:
+                from multishot.utils.gizmo_loader import load_gizmos_and_toolsets
+                from multishot.core.variables import VariableManager
+
+                variable_manager = VariableManager()
+                loader = load_gizmos_and_toolsets(variable_manager)
+                print(f"   - Loaded: {loader.get_loaded_summary()}")
+            except Exception as e:
+                print(f"   ⚠️  Warning: Could not load gizmos/toolsets: {e}")
         else:
             print("❌ Failed to initialize Multishot Workflow System")
 
