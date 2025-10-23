@@ -67,7 +67,3 @@ __pycache__/
 reload_and_test_nodes.py
 debug_*.py
 
-# PRD and internal documentation
-PRD/
-*PRD*.md
-

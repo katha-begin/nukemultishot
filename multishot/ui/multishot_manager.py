@@ -390,6 +390,13 @@ class MultishotManagerDialog(BaseWidget):
 
             print(f"\n🔧 _set_shot called with: {shot_data}")
 
+            # ✅ CRITICAL: Save current shot's versions BEFORE switching
+            if self.current_shot_key:
+                print(f"\n💾 [SET_SHOT] Saving versions for current shot: {self.current_shot_key}")
+                self._save_current_shot_versions()
+            else:
+                print(f"\n⚠️  [SET_SHOT] No current shot to save (first time setup)")
+
             # ✅ CRITICAL FIX: Create root knobs if they don't exist!
             knobs_to_create = {
                 'multishot_project': shot_data['project'],
@@ -481,6 +488,78 @@ class MultishotManagerDialog(BaseWidget):
 
         self.logger.info(f"[SET_SHOT] END: current_shot_key = {self.current_shot_key}")
 
+    def _is_multishot_read_node(self, node):
+        """Check if a node is a MultishotRead node (not Write or Switch)."""
+        try:
+            # Must have multishot_sep knob
+            if not node.knob('multishot_sep'):
+                return False
+
+            # Must have shot_versions knob (only MultishotRead has this)
+            if not node.knob('shot_versions'):
+                return False
+
+            # Must have department knob (MultishotRead has this)
+            if not node.knob('department'):
+                return False
+
+            # Must NOT have output_type knob (MultishotWrite has this)
+            if node.knob('output_type'):
+                return False
+
+            # Must NOT have switch_mode knob (MultishotSwitch has this)
+            if node.knob('switch_mode'):
+                return False
+
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Error checking if node is MultishotRead: {e}")
+            return False
+
+    def _save_current_shot_versions(self):
+        """Save current shot's versions before switching to a new shot."""
+        try:
+            import nuke
+            import multishot.nodes.read_node as read_node_module
+            import json
+
+            # Get current shot key
+            current_shot_key = self.current_shot_key
+            if not current_shot_key:
+                print(f"⚠️  [SAVE_VERSIONS] No current shot to save")
+                return
+
+            print(f"\n💾 [SAVE_VERSIONS] Saving versions for current shot: {current_shot_key}")
+
+            # Find all MultishotRead nodes (not Write or Switch)
+            saved_count = 0
+            for node in nuke.allNodes():
+                if self._is_multishot_read_node(node):  # Is a MultishotRead node
+                    node_name = node.name()
+
+                    # Get node instance
+                    if node_name in read_node_module._node_instances:
+                        instance = read_node_module._node_instances[node_name]
+
+                        # Get current shot_version knob value
+                        current_version = node['shot_version'].value() if node.knob('shot_version') else 'v001'
+                        print(f"   📦 [SAVE_VERSIONS] Node: {node_name}, Current version: {current_version}")
+
+                        # Save this version for the current shot
+                        instance.set_version_for_shot(current_version, current_shot_key)
+                        print(f"   ✅ [SAVE_VERSIONS] Saved {current_version} for {current_shot_key}")
+
+                        saved_count += 1
+
+            self.logger.info(f"Saved {saved_count} node versions for shot {current_shot_key}")
+            print(f"✅ [SAVE_VERSIONS] Saved {saved_count} node versions\n")
+
+        except Exception as e:
+            self.logger.error(f"Error saving current shot versions: {e}")
+            import traceback
+            traceback.print_exc()
+
     def _update_nodes_for_shot(self, shot_data):
         """Update all MultishotRead nodes to use versions for the new shot."""
         try:
@@ -492,10 +571,10 @@ class MultishotManagerDialog(BaseWidget):
 
             print(f"\n🔄 [UPDATE_NODES] Updating nodes for shot: {shot_key}")
 
-            # Find all MultishotRead nodes
+            # Find all MultishotRead nodes (not Write or Switch)
             updated_count = 0
             for node in nuke.allNodes():
-                if node.knob('multishot_sep'):  # Is a MultishotRead node
+                if self._is_multishot_read_node(node):  # Is a MultishotRead node
                     node_name = node.name()
                     print(f"\n📦 [UPDATE_NODES] Processing node: {node_name}")
 
@@ -671,6 +750,12 @@ class MultishotManagerDialog(BaseWidget):
         try:
             shot_key = f"{shot_data['project']}_{shot_data['ep']}_{shot_data['seq']}_{shot_data['shot']}"
 
+            # ✅ CRITICAL FIX: Set the shot FIRST before opening version dialog
+            # This ensures the shot context is set so version scanning works correctly
+            print(f"\n🔧 [SET_VERSIONS] Setting shot first: {shot_key}")
+            self._set_shot(shot_data)
+            print(f"✅ [SET_VERSIONS] Shot set, now opening version dialog...")
+
             # Create and show version dialog
             dialog = VersionSettingDialog(shot_data, shot_key, parent=self)
             if dialog.exec_() == QtWidgets.QDialog.Accepted:
@@ -782,12 +867,12 @@ class MultishotManagerDialog(BaseWidget):
             if reply != QtWidgets.QMessageBox.Yes:
                 return
 
-            # Get all MultishotRead nodes
+            # Get all MultishotRead nodes (not Write or Switch)
             import nuke
             import multishot.nodes.read_node as read_node_module
 
             all_nodes = nuke.allNodes()
-            multishot_nodes = [n for n in all_nodes if n.knob('multishot_sep')]
+            multishot_nodes = [n for n in all_nodes if self._is_multishot_read_node(n)]
 
             if not multishot_nodes:
                 QtWidgets.QMessageBox.information(
@@ -1019,6 +1104,35 @@ class VersionSettingDialog(QtWidgets.QDialog):
 
         layout.addLayout(button_layout)
 
+    def _is_multishot_read_node(self, node):
+        """Check if a node is a MultishotRead node (not Write or Switch)."""
+        try:
+            # Must have multishot_sep knob
+            if not node.knob('multishot_sep'):
+                return False
+
+            # Must have shot_versions knob (only MultishotRead has this)
+            if not node.knob('shot_versions'):
+                return False
+
+            # Must have department knob (MultishotRead has this)
+            if not node.knob('department'):
+                return False
+
+            # Must NOT have output_type knob (MultishotWrite has this)
+            if node.knob('output_type'):
+                return False
+
+            # Must NOT have switch_mode knob (MultishotSwitch has this)
+            if node.knob('switch_mode'):
+                return False
+
+            return True
+
+        except Exception as e:
+            self.logger.error(f"Error checking if node is MultishotRead: {e}")
+            return False
+
     def _load_nodes(self):
         """Load all MultishotRead nodes."""
         try:
@@ -1032,17 +1146,15 @@ class VersionSettingDialog(QtWidgets.QDialog):
             all_nodes = nuke.allNodes()
             self.logger.info(f"Found {len(all_nodes)} total nodes in script")
 
-            # Find all MultishotRead nodes
+            # Find all MultishotRead nodes (not Write or Switch)
             idx = 0
 
             # Debug: Show all registered instances
             self.logger.info(f"Registered node instances: {list(read_node_module._node_instances.keys())}")
 
             for node in all_nodes:
-                has_sep = node.knob('multishot_sep') is not None
-                self.logger.debug(f"Node {node.name()}: has_multishot_sep={has_sep}")
-
-                if node.knob('multishot_sep'):  # Is a MultishotRead node
+                # Check if it's a MultishotRead node (not Write or Switch)
+                if self._is_multishot_read_node(node):
                     self.logger.info(f"Found MultishotRead node: {node.name()}")
 
                     # Debug: Check if node is in instances
