@@ -1,0 +1,27 @@
+--- [ Installation ] ---
+Follow these three steps to install, for more detailed instructions and examples, please refer to the https://www.hiramgifford.com/buddy-system#setup-installation
+1: Locate your .nuke folder. This is typically found in:
+
+Windows: C:\Users\[your_username]\.nuke
+Linux: /home/[your_username]/.nuke
+
+2: Unzip and then copy the entire BuddySystem folder into your .nuke directory
+
+3: Add the following lines to your menu.py file. If you don't have a menu.py file in your .nuke directory, you can create one with any text editor
+   (You can remove the import nuke line if you already have it)
+
+import nuke
+nuke.pluginAddPath('./BuddySystem')
+
+
+--- [ Compatibility ] ---
+"The BuddySystem" has been tested and is compatible with the following:
+
+Nuke Versions: Nuke 11.0v1 and above. While most tools/scripts will work on older nuke versions, some that rely on PySide/Qt don't, and are not officially supported
+
+Operating Systems: Windows 10, CentOS 7
+
+
+--- [ Feedback and Bug Reports ] ---
+"The BuddySystem" is a free tool, and your feedback is highly valuable for its improvement 
+If you encounter any bugs or have suggestions for new features, please report them at https://www.hiramgifford.com/buddy-system#faq-bug-reporter

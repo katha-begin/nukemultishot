@@ -4,15 +4,18 @@ Gizmo and Toolset Loader for Multishot Workflow System.
 Automatically discovers and registers gizmos and toolsets from:
 - Tier 1 (Repository): /gizmo and /toolset directories
 - Tier 2 (Project): {root}/{project}/all/library/gizmo and toolset
+- Third-Party Packages: Auto-detect and load packages with menu.py
 
 Features:
 - Auto-registration to Nuke menu
 - Hierarchical loading (Tier 1 + Tier 2)
 - Support for .gizmo and .nk files
+- Third-party package integration (NukeSurvivalToolkit, BuddySystem, etc.)
 - Organized menu structure
 """
 
 import os
+import sys
 from typing import List, Dict, Optional
 from .logging import get_logger
 
@@ -302,11 +305,186 @@ class GizmoLoader:
 def load_gizmos_and_toolsets(variable_manager=None):
     """
     Convenience function to load all gizmos and toolsets.
-    
+
     Args:
         variable_manager: Optional VariableManager instance
     """
     loader = GizmoLoader(variable_manager)
+    loader.load_all()
+    return loader
+
+
+class ThirdPartyGizmoLoader:
+    """
+    Manages loading of third-party gizmo packages.
+
+    Detects packages with menu.py files and loads them by:
+    1. Adding plugin paths
+    2. Executing menu.py in package context
+
+    Supports packages like:
+    - NukeSurvivalToolkit
+    - BuddySystem
+    - Any package with menu.py
+    """
+
+    def __init__(self):
+        """Initialize ThirdPartyGizmoLoader."""
+        self.logger = get_logger(__name__)
+        self.loaded_packages = []
+
+        # Get repository root
+        self.repo_root = self._get_repo_root()
+        self.gizmo_dir = os.path.join(self.repo_root, 'gizmo')
+
+    def _get_repo_root(self) -> str:
+        """Get the repository root directory."""
+        try:
+            current_file = os.path.abspath(__file__)
+            # Go up: gizmo_loader.py -> utils -> multishot -> repo_root
+            repo_root = os.path.dirname(os.path.dirname(os.path.dirname(current_file)))
+            return repo_root
+        except Exception as e:
+            self.logger.error(f"Error getting repo root: {e}")
+            return ""
+
+    def detect_packages(self) -> List[Dict[str, str]]:
+        """
+        Detect third-party packages in gizmo directory.
+
+        A package is detected if it:
+        - Is a directory in gizmo/
+        - Contains a menu.py file
+
+        Returns:
+            List of package info dictionaries
+        """
+        packages = []
+
+        if not os.path.exists(self.gizmo_dir):
+            self.logger.debug(f"Gizmo directory does not exist: {self.gizmo_dir}")
+            return packages
+
+        try:
+            for item in os.listdir(self.gizmo_dir):
+                item_path = os.path.join(self.gizmo_dir, item)
+
+                # Check if it's a directory
+                if not os.path.isdir(item_path):
+                    continue
+
+                # Check if it has menu.py
+                menu_py = os.path.join(item_path, 'menu.py')
+                if not os.path.exists(menu_py):
+                    continue
+
+                # This is a package!
+                packages.append({
+                    'name': item,
+                    'path': item_path,
+                    'menu_py': menu_py
+                })
+
+            self.logger.info(f"Detected {len(packages)} third-party packages")
+            for pkg in packages:
+                self.logger.info(f"  - {pkg['name']}")
+
+            return packages
+
+        except Exception as e:
+            self.logger.error(f"Error detecting packages: {e}")
+            return []
+
+    def load_package(self, package_info: Dict[str, str]):
+        """
+        Load a single third-party package.
+
+        Args:
+            package_info: Dictionary with 'name', 'path', 'menu_py'
+        """
+        if not NUKE_AVAILABLE:
+            self.logger.warning("Nuke not available, cannot load package")
+            return
+
+        try:
+            name = package_info['name']
+            path = package_info['path']
+            menu_py = package_info['menu_py']
+
+            self.logger.info(f"Loading third-party package: {name}")
+
+            # Add package path to Nuke plugin paths
+            nuke.pluginAddPath(path)
+            self.logger.debug(f"  Added plugin path: {path}")
+
+            # Save current directory
+            original_dir = os.getcwd()
+
+            try:
+                # Change to package directory (for relative paths in menu.py)
+                os.chdir(path)
+                self.logger.debug(f"  Changed directory to: {path}")
+
+                # Execute menu.py
+                # Use exec() to run in current namespace
+                with open(menu_py, 'r') as f:
+                    menu_code = f.read()
+
+                # Create a namespace for the menu.py execution
+                menu_namespace = {
+                    '__file__': menu_py,
+                    '__name__': f'{name}.menu',
+                    'nuke': nuke,
+                }
+
+                exec(menu_code, menu_namespace)
+                self.logger.info(f"  ✅ Executed menu.py for {name}")
+
+                self.loaded_packages.append(package_info)
+
+            finally:
+                # Restore original directory
+                os.chdir(original_dir)
+
+        except Exception as e:
+            self.logger.error(f"Error loading package {package_info.get('name', 'unknown')}: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
+
+    def load_all(self):
+        """Detect and load all third-party packages."""
+        self.logger.info("Loading third-party gizmo packages...")
+
+        packages = self.detect_packages()
+
+        if not packages:
+            self.logger.info("No third-party packages found")
+            return
+
+        for package in packages:
+            self.load_package(package)
+
+        self.logger.info(f"Loaded {len(self.loaded_packages)} third-party packages")
+
+    def get_loaded_summary(self) -> str:
+        """Get a summary of loaded packages."""
+        if not self.loaded_packages:
+            return "No third-party packages loaded"
+
+        summary = f"Loaded {len(self.loaded_packages)} third-party packages:\n"
+        for pkg in self.loaded_packages:
+            summary += f"  - {pkg['name']}\n"
+        return summary
+
+
+def load_third_party_packages():
+    """
+    Convenience function to load all third-party gizmo packages.
+
+    Returns:
+        ThirdPartyGizmoLoader instance
+    """
+    loader = ThirdPartyGizmoLoader()
     loader.load_all()
     return loader
 

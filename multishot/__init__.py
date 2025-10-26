@@ -69,22 +69,40 @@ def initialize():
     try:
         logger = get_logger()
         logger.info("Initializing Multishot Workflow System v%s", __version__)
-        
+
         # Initialize core components
         config_manager = get_config_manager()
         variable_manager = get_variable_manager()
-        
+
+        # Load third-party gizmo packages (NukeSurvivalToolkit, BuddySystem, etc.)
+        logger.info("Loading third-party gizmo packages...")
+        from .utils.gizmo_loader import load_third_party_packages
+        try:
+            third_party_loader = load_third_party_packages()
+            logger.info(third_party_loader.get_loaded_summary())
+        except Exception as e:
+            logger.warning(f"Error loading third-party packages: {e}")
+
+        # Load regular gizmos and toolsets
+        logger.info("Loading gizmos and toolsets...")
+        from .utils.gizmo_loader import load_gizmos_and_toolsets
+        try:
+            gizmo_loader = load_gizmos_and_toolsets(variable_manager)
+            logger.info(gizmo_loader.get_loaded_summary())
+        except Exception as e:
+            logger.warning(f"Error loading gizmos and toolsets: {e}")
+
         # Register custom nodes
         from .nodes import register_all_nodes
         register_all_nodes()
-        
+
         # Setup UI integration
         from .ui import setup_ui_integration
         setup_ui_integration()
-        
+
         logger.info("Multishot Workflow System initialized successfully")
         return True
-        
+
     except Exception as e:
         print(f"Error initializing Multishot Workflow System: {e}")
         import traceback
