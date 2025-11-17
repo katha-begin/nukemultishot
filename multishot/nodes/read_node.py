@@ -254,14 +254,18 @@ if hasattr(read_node_module, '_node_instances'):
 
             # Build expression path using node's shot_version knob and file pattern
             # Format: [value root.IMG_ROOT][value root.project]/all/scene/[value root.ep]/[value root.seq]/[value root.shot]/lighting/publish/[value parent.NodeName.shot_version]/{file_pattern}
+            #
+            # CRITICAL FIX: Use fromUserText() to properly set TCL expressions
+            # When using setValue() with TCL expressions, they may not evaluate in batch mode
+            # fromUserText() ensures expressions are properly marked for evaluation
             file_path = (
                 f"[value root.IMG_ROOT][value root.project]/all/scene/"
                 f"[value root.ep]/[value root.seq]/[value root.shot]/"
                 f"{department}/publish/[value parent.{node_name}.shot_version]/{file_pattern}"
             )
 
-            # Set file path
-            self.node['file'].setValue(file_path)
+            # Set file path using fromUserText() to ensure expressions are evaluated
+            self.node['file'].fromUserText(file_path)
 
             # Update status
             self.node['status'].setValue(f"Path: {department}/{layer}")

@@ -231,15 +231,16 @@ def build_expression_path(self):
     department = self.node['department'].value()
     file_pattern = self.node['file_pattern'].value()
     node_name = self.node.name()
-    
+
     # Build expression path
     file_path = (
         f"[value root.IMG_ROOT][value root.project]/all/scene/"
         f"[value root.ep]/[value root.seq]/[value root.shot]/"
         f"{department}/publish/[value parent.{node_name}.shot_version]/{file_pattern}"
     )
-    
-    self.node['file'].setValue(file_path)
+
+    # Use fromUserText() to ensure expressions are evaluated in batch mode
+    self.node['file'].fromUserText(file_path)
 ```
 </augment_code_snippet>
 

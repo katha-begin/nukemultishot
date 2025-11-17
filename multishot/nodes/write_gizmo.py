@@ -345,9 +345,9 @@ if instance:
                 f'{department}/version/{version}/{layer}.mov'
             )
 
-            # Update Write nodes
-            self.write_exr['file'].setValue(exr_template)
-            self.write_mov['file'].setValue(mov_template)
+            # Update Write nodes using fromUserText() to ensure expressions are evaluated
+            self.write_exr['file'].fromUserText(exr_template)
+            self.write_mov['file'].fromUserText(mov_template)
 
             # Update status
             self._update_status(exr_template)

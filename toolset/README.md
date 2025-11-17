@@ -144,7 +144,7 @@ load_gizmos_and_toolsets()
 
 # 1. Create a basic comp setup
 read = nuke.nodes.Read()
-read['file'].setValue('[value root.IMG_ROOT]/[value root.project]/plate.%04d.exr')
+read['file'].fromUserText('[value root.IMG_ROOT]/[value root.project]/plate.%04d.exr')
 
 grade = nuke.nodes.Grade()
 grade.setInput(0, read)
@@ -154,7 +154,7 @@ blur.setInput(0, grade)
 
 write = nuke.nodes.Write()
 write.setInput(0, blur)
-write['file'].setValue('[value root.IMG_ROOT]/[value root.project]/output.%04d.exr')
+write['file'].fromUserText('[value root.IMG_ROOT]/[value root.project]/output.%04d.exr')
 
 # 2. Select all nodes
 for node in [read, grade, blur, write]:

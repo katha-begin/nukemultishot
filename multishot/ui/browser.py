@@ -1611,7 +1611,7 @@ class MultishotBrowser(BaseWidget):
 
                     # Build expression-based file path using PROJ_ROOT (geometry uses project root)
                     expr_path = self._build_geometry_expression_path(asset_path, department)
-                    geo_node['file'].setValue(expr_path)
+                    geo_node['file'].fromUserText(expr_path)
                 else:
                     # Create ReadGeo node for geometry files
                     geo_node = nuke.createNode('ReadGeo2')
@@ -1619,7 +1619,7 @@ class MultishotBrowser(BaseWidget):
 
                     # Build expression-based file path using PROJ_ROOT (geometry uses project root)
                     expr_path = self._build_geometry_expression_path(asset_path, department)
-                    geo_node['file'].setValue(expr_path)
+                    geo_node['file'].fromUserText(expr_path)
 
                 created_nodes.append(geo_node.name())
 
