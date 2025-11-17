@@ -91,6 +91,41 @@ class VariableManager:
                 root.addKnob(knob)
                 self.logger.debug(f"Created {self.CONTEXT_KNOB} knob")
 
+            # Set onScriptLoad callback to ensure variables are accessible in batch mode
+            # This callback runs automatically when the script is loaded, even without NUKE_PATH
+            callback_code = '''import json
+try:
+    # Ensure individual knobs exist for context variables
+    if nuke.root().knob('multishot_context'):
+        context_json = nuke.root()['multishot_context'].value()
+        if context_json:
+            context_vars = json.loads(context_json)
+            for key, value in context_vars.items():
+                if key not in nuke.root().knobs():
+                    knob = nuke.String_Knob(key, key)
+                    knob.setFlag(nuke.INVISIBLE)
+                    nuke.root().addKnob(knob)
+                nuke.root()[key].setValue(str(value))
+
+    # Ensure individual knobs exist for custom variables (PROJ_ROOT, IMG_ROOT)
+    if nuke.root().knob('multishot_custom'):
+        custom_json = nuke.root()['multishot_custom'].value()
+        if custom_json:
+            custom_vars = json.loads(custom_json)
+            for key, value in custom_vars.items():
+                if key in ['PROJ_ROOT', 'IMG_ROOT']:
+                    if key not in nuke.root().knobs():
+                        knob = nuke.String_Knob(key, key)
+                        knob.setFlag(nuke.INVISIBLE)
+                        nuke.root().addKnob(knob)
+                    nuke.root()[key].setValue(str(value))
+    print("Multishot: Variables initialized from onScriptLoad callback")
+except Exception as e:
+    print("Multishot: Error in onScriptLoad callback: " + str(e))
+'''
+            root['onScriptLoad'].setValue(callback_code)
+            self.logger.debug("Set onScriptLoad callback for batch mode variable initialization")
+
             # Create custom variables knob if it doesn't exist
             if self.CUSTOM_KNOB not in root.knobs():
                 knob = nuke.String_Knob(self.CUSTOM_KNOB, 'Multishot Custom')
