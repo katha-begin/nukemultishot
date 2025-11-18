@@ -32,10 +32,10 @@ def ensure_variables_for_batch_mode():
         if custom_vars:
             vm._create_individual_root_knobs(custom_vars)
 
-        print("✅ Multishot: Variables initialized for batch mode")
+        print("Multishot: Variables initialized for batch mode")
 
     except Exception as e:
-        print(f"⚠️  Multishot: Error initializing variables in batch mode: {e}")
+        print("Multishot: Error initializing variables in batch mode: {}".format(e))
         import traceback
         traceback.print_exc()
 
