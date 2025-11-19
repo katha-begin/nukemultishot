@@ -96,6 +96,7 @@ def fix_ocio_display_for_batch_mode():
         # Fix Write nodes
         for node in nuke.allNodes('Write'):
             try:
+                # Fix colorspace if needed
                 if node.knob('colorspace'):
                     current_cs = node.knob('colorspace').value()
                     if current_cs in display_to_colorspace_map:
@@ -104,6 +105,21 @@ def fix_ocio_display_for_batch_mode():
                         print("  Write '{}': changed colorspace '{}' -> '{}'".format(
                             node.name(), current_cs, new_cs))
                         fixed_count += 1
+
+                # CRITICAL: Disable Output Transform (Nuke 16 feature)
+                # This adds display/view knobs that cause "Bad value for display" errors
+                if node.knob('useOCIODisplayView'):
+                    if node.knob('useOCIODisplayView').value():
+                        node.knob('useOCIODisplayView').setValue(False)
+                        print("  Write '{}': disabled Output Transform".format(node.name()))
+                        fixed_count += 1
+
+                    # Clear display and view knobs to prevent errors
+                    if node.knob('display'):
+                        node.knob('display').setValue('')
+                    if node.knob('view'):
+                        node.knob('view').setValue('')
+
             except Exception as e:
                 print("  Warning: Could not fix Write node '{}': {}".format(node.name(), e))
 
