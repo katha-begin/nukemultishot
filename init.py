@@ -64,11 +64,16 @@ def fix_ocio_display_for_batch_mode():
         print("Multishot: Fixing Output Transform for batch mode...")
 
         # Get OCIO config (may be custom or default)
-        ocio_config_path = nuke.root().knob('customOCIOConfigPath')
-        if ocio_config_path and ocio_config_path.value():
-            print("  OCIO config: {}".format(ocio_config_path.value()))
+        ocio_config_path_knob = nuke.root().knob('customOCIOConfigPath')
+        if ocio_config_path_knob:
+            ocio_config_path = ocio_config_path_knob.value()
+            print("  DEBUG: customOCIOConfigPath knob value: '{}'".format(ocio_config_path))
+            if ocio_config_path:
+                print("  OCIO config: {}".format(ocio_config_path))
+            else:
+                print("  OCIO config: default (knob is empty)")
         else:
-            print("  OCIO config: default")
+            print("  OCIO config: default (no customOCIOConfigPath knob)")
 
         # Map of display device names to proper colorspaces
         display_to_colorspace_map = {
@@ -124,19 +129,28 @@ def fix_ocio_display_for_batch_mode():
                                 import PyOpenColorIO as OCIO
                                 config = OCIO.GetCurrentConfig()
 
+                                print("  DEBUG: Write '{}' has invalid display '{}', querying OCIO...".format(node.name(), current_display))
+
                                 # Get the default display
                                 default_display = config.getDefaultDisplay()
+                                print("  DEBUG: OCIO default display: '{}'".format(default_display))
+
                                 if default_display:
                                     # Get the default view for this display
                                     default_view = config.getDefaultView(default_display)
+                                    print("  DEBUG: OCIO default view for '{}': '{}'".format(default_display, default_view))
 
                                     display_knob.setValue(default_display)
                                     view_knob.setValue(default_view)
                                     print("  Write '{}': fixed Output Transform display '{}' -> '{}', view '{}' -> '{}'".format(
                                         node.name(), current_display, default_display, current_view, default_view))
                                     fixed_count += 1
+                                else:
+                                    print("  DEBUG: OCIO config has no default display!")
                             except Exception as ocio_error:
                                 print("  Warning: Could not query OCIO config for Write '{}': {}".format(node.name(), ocio_error))
+                                import traceback
+                                traceback.print_exc()
 
             except Exception as e:
                 print("  Warning: Could not fix Write node '{}': {}".format(node.name(), e))
