@@ -878,6 +878,52 @@ class MultishotManagerDialog(BaseWidget):
                     return True
                 return False
 
+            # Helper function to preserve frame padding in file paths
+            def preserve_frame_padding(original_path, evaluated_path):
+                """
+                Preserve frame padding patterns (%04d, ####, etc.) when baking paths.
+
+                Args:
+                    original_path: Original path with expressions (may contain padding)
+                    evaluated_path: Evaluated path with actual frame number
+
+                Returns:
+                    Path with expressions baked but frame padding preserved
+                """
+                import re
+
+                # Common frame padding patterns
+                padding_patterns = [
+                    (r'%0?(\d+)d', r'%0\1d'),  # %04d, %4d
+                    (r'#+', lambda m: '#' * len(m.group(0))),  # ####
+                    (r'\.\d{4,}\.', '.####.'),  # .1001. -> .####.
+                ]
+
+                # Check if original has padding pattern
+                has_padding = False
+                for pattern, replacement in padding_patterns:
+                    if re.search(pattern, original_path):
+                        has_padding = True
+                        break
+
+                if not has_padding:
+                    # No padding in original, return evaluated as-is
+                    return evaluated_path
+
+                # Replace frame number in evaluated path with padding from original
+                # Find padding pattern in original
+                for pattern, replacement in padding_patterns:
+                    match = re.search(pattern, original_path)
+                    if match:
+                        padding = match.group(0)
+                        # Replace frame number in evaluated path with padding
+                        # Look for 4+ digit numbers (frame numbers)
+                        result = re.sub(r'\.\d{4,}\.', f'.{padding}.', evaluated_path)
+                        if result != evaluated_path:
+                            return result
+
+                return evaluated_path
+
             # Bake Read nodes
             for node in nuke.allNodes('Read'):
                 try:
@@ -893,10 +939,11 @@ class MultishotManagerDialog(BaseWidget):
                                 node.addKnob(knob)
                             node['multishot_original_file'].setValue(original_expr)
 
-                            # Bake to static value
+                            # Bake to static value, preserving frame padding
                             evaluated_path = node['file'].evaluate()
-                            node['file'].setValue(evaluated_path)
-                            self.logger.info(f"Baked Read file: {node.name()} -> {evaluated_path}")
+                            baked_path = preserve_frame_padding(original_expr, evaluated_path)
+                            node['file'].setValue(baked_path)
+                            self.logger.info(f"Baked Read file: {node.name()} -> {baked_path}")
 
                     # Bake frame range
                     if node.knob('first') and has_expression(node['first']):
@@ -959,10 +1006,11 @@ class MultishotManagerDialog(BaseWidget):
                                 node.addKnob(knob)
                             node['multishot_original_file'].setValue(original_expr)
 
-                            # Bake to static value
+                            # Bake to static value, preserving frame padding
                             evaluated_path = node['file'].evaluate()
-                            node['file'].setValue(evaluated_path)
-                            self.logger.info(f"Baked Write file: {node.name()} -> {evaluated_path}")
+                            baked_path = preserve_frame_padding(original_expr, evaluated_path)
+                            node['file'].setValue(baked_path)
+                            self.logger.info(f"Baked Write file: {node.name()} -> {baked_path}")
 
                     baked_count += 1
 
