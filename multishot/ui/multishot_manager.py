@@ -821,6 +821,8 @@ class MultishotManagerDialog(BaseWidget):
         try:
             import nuke
             from .render_farm_dialog import RenderFarmDialog
+            from ..deadline.farm_script import FarmScriptManager
+            from ..deadline.farm_submission import DeadlineFarmSubmitter
 
             # Check if script is saved
             script_path = nuke.root().name()
@@ -832,19 +834,55 @@ class MultishotManagerDialog(BaseWidget):
                 )
                 return
 
+            # Add PROJ_ROOT to shot_data if not present
+            if 'PROJ_ROOT' not in shot_data:
+                proj_root = self.variable_manager.get_variable('PROJ_ROOT')
+                if proj_root:
+                    shot_data['PROJ_ROOT'] = proj_root
+
             # Show render farm dialog
             dialog = RenderFarmDialog(shot_data, parent=self)
             if dialog.exec_() == QtWidgets.QDialog.Accepted:
                 # Get selected Write nodes and order
                 selected_writes = dialog.get_selected_writes()
-                if selected_writes:
-                    self.logger.info(f"Submitting {len(selected_writes)} Write nodes to render farm")
-                    # TODO: Implement actual submission
+                if not selected_writes:
+                    return
+
+                self.logger.info(f"Submitting {len(selected_writes)} Write nodes to render farm")
+
+                # Create farm script
+                farm_manager = FarmScriptManager()
+                farm_script_path = farm_manager.create_farm_script(shot_data, script_path)
+
+                # Get frame range
+                first_frame = int(nuke.root()['first_frame'].value())
+                last_frame = int(nuke.root()['last_frame'].value())
+                frame_range = (first_frame, last_frame)
+
+                # Submit to Deadline
+                submitter = DeadlineFarmSubmitter()
+                job_ids = submitter.submit_write_nodes(
+                    farm_script_path,
+                    selected_writes,
+                    shot_data,
+                    frame_range
+                )
+
+                # Show success message
+                if job_ids:
                     QtWidgets.QMessageBox.information(
                         self,
                         "Render Farm Submission",
-                        f"Submitted {len(selected_writes)} Write nodes to render farm.\n\n"
-                        f"(Implementation in progress)"
+                        f"Successfully submitted {len(job_ids)} jobs to Deadline!\n\n"
+                        f"Farm script: {farm_script_path}\n"
+                        f"Frame range: {first_frame}-{last_frame}\n"
+                        f"Job IDs: {', '.join(job_ids)}"
+                    )
+                else:
+                    QtWidgets.QMessageBox.warning(
+                        self,
+                        "Render Farm Submission",
+                        "No jobs were submitted to Deadline."
                     )
 
         except Exception as e:
