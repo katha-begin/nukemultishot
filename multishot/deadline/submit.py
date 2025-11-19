@@ -372,10 +372,18 @@ def submit_to_deadline():
             # STEP 3: Delete Viewer nodes (they cause issues in batch mode)
             delete_viewer_nodes_for_batch_mode()
 
-            # STEP 4: Patch the submission to add our environment variables
+            # STEP 4: SAVE THE SCRIPT to write variables to .nk file!
+            print("\n" + "=" * 70)
+            print("MULTISHOT: Saving script to embed variables in .nk file")
+            print("=" * 70)
+            nuke.scriptSave()
+            print("Script saved: {}".format(nuke.root().name()))
+            print("=" * 70 + "\n")
+
+            # STEP 5: Patch the submission to add our environment variables
             _patch_deadline_submission()
 
-            # STEP 5: Open submission dialog
+            # STEP 6: Open submission dialog
             print("Opening Deadline submission dialog...")
             SubmitNukeToDeadline.SubmitToDeadline()
 
