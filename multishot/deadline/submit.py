@@ -142,7 +142,9 @@ def _patch_deadline_submission():
                 handle = original_open(file, mode, *args, **kwargs)
 
                 # Check if this is a job info file being written
-                if mode in ('w', 'w+', 'wb', 'wb+') and isinstance(file, str) and 'submit_info' in file and file.endswith('.job'):
+                # Pattern: nuke_submit_info%d.job (NOT nuke_plugin_info%d.job)
+                if mode in ('w', 'w+', 'wb', 'wb+') and isinstance(file, str) and 'nuke_submit_info' in file and file.endswith('.job'):
+                    print("MULTISHOT: Intercepting job info file: {}".format(file))
                     return FileHandleWrapper(handle, is_job_info=True)
 
                 return handle
