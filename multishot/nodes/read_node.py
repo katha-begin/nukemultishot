@@ -267,6 +267,17 @@ if hasattr(read_node_module, '_node_instances'):
             # Set file path using fromUserText() to ensure expressions are evaluated
             self.node['file'].fromUserText(file_path)
 
+            # ✅ FIX: Set first/last frame to use root knobs
+            # This ensures the Read node uses the correct frame range from the script
+            # Without this, the expressions might evaluate incorrectly and get "baked" into the script
+            if self.node.knob('first'):
+                self.node['first'].fromUserText('[value root.first_frame]')
+                self.logger.debug("[BUILD_PATH] Set first frame to [value root.first_frame]")
+
+            if self.node.knob('last'):
+                self.node['last'].fromUserText('[value root.last_frame]')
+                self.logger.debug("[BUILD_PATH] Set last frame to [value root.last_frame]")
+
             # Update status
             self.node['status'].setValue(f"Path: {department}/{layer}")
 

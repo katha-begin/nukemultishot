@@ -34,6 +34,9 @@ def ensure_variables_for_batch_mode():
 
         print("Multishot: Variables initialized for batch mode")
 
+        # Fix Read node frame ranges for batch mode
+        fix_read_node_frame_ranges()
+
         # Fix OCIO display settings for batch mode
         fix_ocio_display_for_batch_mode()
 
@@ -42,6 +45,49 @@ def ensure_variables_for_batch_mode():
         import traceback
         traceback.print_exc()
 
+
+
+def fix_read_node_frame_ranges():
+    """
+    Fix Read node first/last frame expressions for batch mode.
+
+    Issue: Read nodes may have incorrectly evaluated first/last expressions
+    like {{"\[value root.first_frame]" x1 1}} which causes frame mismatches.
+
+    Solution: Reset first/last to proper TCL expressions.
+    """
+    try:
+        import nuke
+
+        print("Multishot: Fixing Read node frame ranges for batch mode...")
+
+        fixed_count = 0
+
+        # Fix all Read nodes
+        for node in nuke.allNodes('Read'):
+            try:
+                # Reset first/last frame to use root knobs
+                if node.knob('first'):
+                    node['first'].fromUserText('[value root.first_frame]')
+                    fixed_count += 1
+
+                if node.knob('last'):
+                    node['last'].fromUserText('[value root.last_frame]')
+
+                print("  Read '{}': reset frame range to use root knobs".format(node.name()))
+
+            except Exception as e:
+                print("  Warning: Could not fix Read node '{}': {}".format(node.name(), e))
+
+        if fixed_count > 0:
+            print("Multishot: Fixed {} Read node(s)".format(fixed_count))
+        else:
+            print("Multishot: No Read nodes needed fixing")
+
+    except Exception as e:
+        print("  Warning: Could not fix Read node frame ranges: {}".format(e))
+        import traceback
+        traceback.print_exc()
 
 
 def register_ocio_viewer_processes():
