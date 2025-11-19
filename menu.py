@@ -41,6 +41,15 @@ try:
 
             multishot_menu.addSeparator()
 
+            # Add utility commands
+            multishot_menu.addCommand(
+                'Fix Invisible Knobs',
+                'from multishot.utils.fix_invisible_knobs import fix_invisible_knobs; fix_invisible_knobs()',
+                tooltip='Remove +INVISIBLE flag from multishot knobs (fixes Deadline stripping issue)'
+            )
+
+            multishot_menu.addSeparator()
+
             # Add Deadline submission
             multishot_menu.addCommand(
                 'Submit to Deadline',
