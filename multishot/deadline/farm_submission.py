@@ -26,40 +26,39 @@ class DeadlineFarmSubmitter:
     ) -> List[str]:
         """
         Submit Write nodes as separate Deadline jobs with dependencies.
-        
+
         Args:
             farm_script_path: Path to farm script
-            write_nodes: List of Write node info dicts with 'node', 'name', 'order'
+            write_nodes: List of Write node info dicts with 'name', 'file', 'order'
             shot_data: Shot context (project, ep, seq, shot)
             frame_range: (first_frame, last_frame)
-            
+
         Returns:
             List of Deadline job IDs
         """
         try:
-            import nuke
-            
             self.logger.info(f"Submitting {len(write_nodes)} Write nodes to Deadline...")
-            
+
             # Get Deadline command
             deadline_command = self._get_deadline_command()
             if not deadline_command:
                 raise Exception("Deadline command not found")
-            
+
             job_ids = []
             previous_job_ids = []  # Track previous jobs for dependencies
-            
+
             for idx, write_info in enumerate(write_nodes):
-                write_node = write_info['node']
                 write_name = write_info['name']
+                write_file = write_info.get('file', '')
                 order = write_info['order']
-                
+
                 self.logger.info(f"Submitting job {idx + 1}/{len(write_nodes)}: {write_name}")
                 
                 # Create job info file
                 job_info_path = self._create_job_info_file(
                     farm_script_path,
                     write_name,
+                    write_file,
                     shot_data,
                     frame_range,
                     order,
@@ -125,6 +124,7 @@ class DeadlineFarmSubmitter:
         self,
         farm_script_path: str,
         write_name: str,
+        write_file: str,
         shot_data: Dict,
         frame_range: tuple,
         order: int,
@@ -142,16 +142,10 @@ class DeadlineFarmSubmitter:
             shot_key = f"{shot_data['project']}_{shot_data['ep']}_{shot_data['seq']}_{shot_data['shot']}"
             batch_name = shot_key
 
-            # Get output directory from Write node
+            # Get output directory from write file path
             output_dir = ""
-            try:
-                import nuke
-                write_node = nuke.toNode(write_name)
-                if write_node and write_node.knob('file'):
-                    output_path = write_node['file'].value()
-                    output_dir = os.path.dirname(output_path)
-            except:
-                pass
+            if write_file:
+                output_dir = os.path.dirname(write_file)
 
             # Create job info content
             first_frame, last_frame = frame_range

@@ -851,24 +851,37 @@ class MultishotManagerDialog(BaseWidget):
                 self.logger.info(f"Submitting {len(selected_writes)} Write nodes to render farm")
 
                 try:
+                    # Get frame range BEFORE creating farm script
+                    first_frame = int(nuke.root()['first_frame'].value())
+                    last_frame = int(nuke.root()['last_frame'].value())
+                    frame_range = (first_frame, last_frame)
+                    self.logger.info(f"Frame range: {first_frame}-{last_frame}")
+
+                    # Store Write node info BEFORE creating farm script
+                    # (because after reload, node objects will be invalid)
+                    write_info_list = []
+                    for write_info in selected_writes:
+                        node = write_info['node']
+                        info = {
+                            'name': node.name(),
+                            'file': node['file'].value() if node.knob('file') else '',
+                            'order': write_info['order']
+                        }
+                        write_info_list.append(info)
+                        self.logger.info(f"  Write node: {info['name']} -> {info['file']}")
+
                     # Create farm script
                     farm_manager = FarmScriptManager()
                     self.logger.info("Creating farm script...")
                     farm_script_path = farm_manager.create_farm_script(shot_data, script_path)
                     self.logger.info(f"Farm script created: {farm_script_path}")
 
-                    # Get frame range
-                    first_frame = int(nuke.root()['first_frame'].value())
-                    last_frame = int(nuke.root()['last_frame'].value())
-                    frame_range = (first_frame, last_frame)
-                    self.logger.info(f"Frame range: {first_frame}-{last_frame}")
-
-                    # Submit to Deadline
+                    # Submit to Deadline (using stored info, not node objects)
                     submitter = DeadlineFarmSubmitter()
                     self.logger.info("Submitting to Deadline...")
                     job_ids = submitter.submit_write_nodes(
                         farm_script_path,
-                        selected_writes,
+                        write_info_list,
                         shot_data,
                         frame_range
                     )
