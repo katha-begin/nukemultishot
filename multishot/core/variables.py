@@ -190,6 +190,44 @@ except Exception as e:
         except Exception as e:
             self.logger.error(f"Error ensuring root variables in script: {e}")
 
+    def _map_path_for_platform(self, path):
+        """
+        Map Windows paths to Linux paths when running on Linux.
+
+        Deadline's path mapping only applies to file paths in Read/Write nodes,
+        not to custom knobs. We need to do the mapping ourselves.
+
+        Args:
+            path: Path to map (e.g., "V:/", "W:/", "T:/")
+
+        Returns:
+            Mapped path for current platform
+        """
+        import platform
+
+        # Only map if we're on Linux
+        if platform.system() != 'Linux':
+            return path
+
+        # Path mapping configuration (matches Deadline repository settings)
+        path_mappings = {
+            'V:/': '/mnt/igloo_swa_v/',
+            'W:/': '/mnt/igloo_swa_w/',
+            'T:/': '/mnt/ppr_dev_t/',
+            'V:\\': '/mnt/igloo_swa_v/',
+            'W:\\': '/mnt/igloo_swa_w/',
+            'T:\\': '/mnt/ppr_dev_t/',
+        }
+
+        # Check if path starts with any Windows drive letter
+        for win_path, linux_path in path_mappings.items():
+            if path.startswith(win_path):
+                mapped = path.replace(win_path, linux_path, 1)
+                self.logger.info(f"Path mapping: {path} -> {mapped}")
+                return mapped
+
+        return path
+
     def _create_individual_root_knobs(self, root_variables: Dict[str, str]):
         """Create individual knobs for root variables so they can be accessed as [value root.VARIABLE_NAME]."""
         try:
@@ -197,20 +235,28 @@ except Exception as e:
             root = nuke.root()
 
             for key, value in root_variables.items():
+                # Map Windows paths to Linux paths if needed
+                mapped_value = self._map_path_for_platform(value)
+
                 # Check if knob already exists
                 if key not in root.knobs():
                     # Create string knob for the variable
                     knob = nuke.String_Knob(key, key)
                     knob.setFlag(nuke.INVISIBLE)  # Hide from UI
                     root.addKnob(knob)
-                    # Set initial value only when creating the knob
-                    root[key].setValue(value)
-                    self.logger.debug(f"Created individual knob: {key} = {value}")
+                    # Set initial value with platform-mapped path
+                    root[key].setValue(mapped_value)
+                    self.logger.info(f"Created individual knob: {key} = {mapped_value}")
                 else:
-                    # Knob already exists - DON'T overwrite it!
-                    # In batch mode, Deadline may have already set this to the correct Linux path
+                    # Knob already exists - check if it needs updating
                     existing_value = root[key].value()
-                    self.logger.debug(f"Knob {key} already exists with value: {existing_value} (not overwriting)")
+
+                    # In batch mode on Linux, update Windows paths to Linux paths
+                    if not nuke.GUI and existing_value != mapped_value:
+                        root[key].setValue(mapped_value)
+                        self.logger.info(f"Updated knob {key}: {existing_value} -> {mapped_value}")
+                    else:
+                        self.logger.debug(f"Knob {key} already exists with value: {existing_value}")
 
         except Exception as e:
             self.logger.error(f"Error creating individual root knobs: {e}")
