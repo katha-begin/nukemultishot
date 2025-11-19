@@ -42,6 +42,8 @@ def ensure_variables_for_batch_mode():
         import traceback
         traceback.print_exc()
 
+
+
 def fix_ocio_display_for_batch_mode():
     """
     Fix OCIO display/colorspace settings for batch mode rendering.
@@ -182,7 +184,7 @@ try:
         # Call immediately for current script
         ensure_variables_for_batch_mode()
 
-        # Also add as callback for when scripts are loaded
+        # Also add as callbacks for when new scripts are loaded
         nuke.addOnScriptLoad(ensure_variables_for_batch_mode)
         nuke.addOnCreate(ensure_variables_for_batch_mode, nodeClass='Root')
 

@@ -67,6 +67,78 @@ def get_ocio_path():
     return default_path
 
 
+def fix_ocio_in_current_script():
+    """
+    Fix OCIO display device names in the current Nuke script before submission.
+
+    This function scans all Read and Write nodes and replaces display device names
+    with proper colorspaces to prevent "Bad value for display" errors on render farm.
+
+    Returns:
+        int: Number of fixes applied
+    """
+    try:
+        import nuke
+
+        print("Checking for OCIO display device names in script...")
+
+        # Map of display device names to proper colorspaces
+        display_to_colorspace_map = {
+            'sRGB - Display': 'sRGB - Texture',
+            'Rec.1886 Rec.709 - Display': 'Rec.709 - Display',
+            'Rec.1886 Rec.2020 - Display': 'Rec.2020 - Display',
+        }
+
+        fixed_count = 0
+
+        # Fix Read nodes
+        for node in nuke.allNodes('Read'):
+            try:
+                if node.knob('colorspace'):
+                    current_cs = node.knob('colorspace').value()
+                    if current_cs in display_to_colorspace_map:
+                        new_cs = display_to_colorspace_map[current_cs]
+                        node.knob('colorspace').setValue(new_cs)
+                        print("  Read '{}': changed colorspace '{}' -> '{}'".format(
+                            node.name(), current_cs, new_cs))
+                        fixed_count += 1
+            except Exception as e:
+                print("  Warning: Could not check Read node '{}': {}".format(node.name(), e))
+
+        # Fix Write nodes
+        for node in nuke.allNodes('Write'):
+            try:
+                if node.knob('colorspace'):
+                    current_cs = node.knob('colorspace').value()
+                    if current_cs in display_to_colorspace_map:
+                        new_cs = display_to_colorspace_map[current_cs]
+                        node.knob('colorspace').setValue(new_cs)
+                        print("  Write '{}': changed colorspace '{}' -> '{}'".format(
+                            node.name(), current_cs, new_cs))
+                        fixed_count += 1
+            except Exception as e:
+                print("  Warning: Could not check Write node '{}': {}".format(node.name(), e))
+
+        if fixed_count > 0:
+            print("Fixed {} OCIO display device names before submission".format(fixed_count))
+            # Save the script with fixes
+            try:
+                nuke.scriptSave()
+                print("Script saved with OCIO fixes")
+            except:
+                print("Warning: Could not auto-save script. Please save manually.")
+        else:
+            print("No OCIO fixes needed")
+
+        return fixed_count
+
+    except Exception as e:
+        print("Error fixing OCIO settings: {}".format(e))
+        import traceback
+        traceback.print_exc()
+        return 0
+
+
 def add_multishot_env_vars(job_info_file_handle, start_index=0):
     """
     Add multishot environment variables to the Deadline job info file.
