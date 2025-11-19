@@ -19,52 +19,45 @@ import platform
 def get_environment_variables():
     """
     Get environment variables that should be passed to Deadline render nodes.
-    
+
+    IMPORTANT: Deadline render nodes are Linux, so we must use Linux paths!
+    Deadline's path mapping does NOT apply to environment variables.
+
     Returns:
         dict: Dictionary of environment variable names and values
     """
     env_vars = {}
-    
-    # Determine platform-specific paths
-    is_windows = platform.system() == 'Windows'
-    
+
+    # CRITICAL: Render nodes are Linux, so use Linux paths for environment variables
+    # Deadline path mapping only applies to file paths in .nk scripts, NOT to env vars!
+
     # NUKE_PATH - critical for loading init.py
-    if is_windows:
-        multishot_path = 'T:/pipeline/development/nuke/nukemultishot'
-    else:
-        multishot_path = '/mnt/ppr_dev_t/pipeline/development/nuke/nukemultishot'
-    
-    # Check if path exists
-    if os.path.exists(multishot_path):
-        # Get existing NUKE_PATH and append if needed
-        existing_nuke_path = os.environ.get('NUKE_PATH', '')
-        if existing_nuke_path:
-            if multishot_path not in existing_nuke_path:
-                env_vars['NUKE_PATH'] = multishot_path + os.pathsep + existing_nuke_path
-            else:
-                env_vars['NUKE_PATH'] = existing_nuke_path
-        else:
-            env_vars['NUKE_PATH'] = multishot_path
-    
+    # Use Linux path for render nodes
+    multishot_path_linux = '/mnt/ppr_dev_t/pipeline/development/nuke/nukemultishot'
+    env_vars['NUKE_PATH'] = multishot_path_linux
+
     # OCIO - color management config
     try:
         import nuke
         # Try to get OCIO from script first
         ocio_knob = nuke.root().knob('customOCIOConfigPath')
         if ocio_knob and ocio_knob.value():
-            env_vars['OCIO'] = ocio_knob.value()
+            # Convert Windows path to Linux path for render nodes
+            ocio_path = ocio_knob.value()
+            # Apply path mapping: T:/ -> /mnt/ppr_dev_t/
+            if ocio_path.startswith('T:/') or ocio_path.startswith('T:\\'):
+                ocio_path = ocio_path.replace('T:/', '/mnt/ppr_dev_t/').replace('T:\\', '/mnt/ppr_dev_t/')
+                ocio_path = ocio_path.replace('\\', '/')
+            env_vars['OCIO'] = ocio_path
         else:
-            # Use default OCIO path
-            if is_windows:
-                ocio_path = 'T:/pipeline/ocio/aces_2.0/studio-config-v1.0.0_aces-v1.3_ocio-v2.0.ocio'
-            else:
-                ocio_path = '/mnt/ppr_dev_t/pipeline/ocio/aces_2.0/studio-config-v1.0.0_aces-v1.3_ocio-v2.0.ocio'
-            
-            if os.path.exists(ocio_path):
-                env_vars['OCIO'] = ocio_path
+            # Use default OCIO path (Linux path for render nodes)
+            ocio_path_linux = '/mnt/ppr_dev_t/pipeline/ocio/aces_2.0/studio-config-v1.0.0_aces-v1.3_ocio-v2.0.ocio'
+            env_vars['OCIO'] = ocio_path_linux
     except:
-        pass
-    
+        # Fallback to default OCIO path
+        ocio_path_linux = '/mnt/ppr_dev_t/pipeline/ocio/aces_2.0/studio-config-v1.0.0_aces-v1.3_ocio-v2.0.ocio'
+        env_vars['OCIO'] = ocio_path_linux
+
     return env_vars
 
 
@@ -115,6 +108,7 @@ def _patch_deadline_submission():
                         print("=" * 70)
 
                         # Write environment variables
+                        # Format: EnvironmentKeyValue0=KEY=VALUE
                         env_index = 0
                         for key, value in env_vars.items():
                             env_line = "EnvironmentKeyValue{}={}={}\n".format(env_index, key, value)
@@ -122,8 +116,20 @@ def _patch_deadline_submission():
                             print("  Added: {} = {}".format(key, value))
                             env_index += 1
 
+                        # Ensure job environment is merged with worker environment
+                        # UseJobEnvironmentOnly=false means merge (default behavior)
+                        self._handle.write("UseJobEnvironmentOnly=false\n")
+                        print("  Set: UseJobEnvironmentOnly = false (merge with worker env)")
+
                         print("=" * 70 + "\n")
                         env_vars_added[0] = True
+
+                        # Debug: Try to read back the file to verify
+                        try:
+                            file_path = self._handle.name
+                            print("DEBUG: Job info file path: {}".format(file_path))
+                        except:
+                            pass
 
                     self._closed = True
                     return self._handle.close()
