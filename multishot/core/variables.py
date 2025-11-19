@@ -32,9 +32,20 @@ class VariableManager:
         self._nuke_available = self._check_nuke_availability()
 
         if self._nuke_available:
-            self.logger.info("VariableManager initialized with Nuke integration")
-            self._ensure_knobs_exist()
-            self._ensure_root_variables_in_script()
+            # Check if we're in batch mode
+            import nuke
+            is_batch_mode = not nuke.GUI
+
+            if is_batch_mode:
+                # BATCH MODE: Do NOT modify variables!
+                # Deadline has already mapped paths in the .nk file.
+                # Just log that we're in batch mode.
+                self.logger.info("VariableManager initialized in batch mode (read-only)")
+            else:
+                # GUI MODE: Normal initialization
+                self.logger.info("VariableManager initialized with Nuke integration")
+                self._ensure_knobs_exist()
+                self._ensure_root_variables_in_script()
         else:
             self.logger.info("VariableManager initialized in standalone mode")
 
