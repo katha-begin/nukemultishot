@@ -379,7 +379,9 @@ def submit_to_deadline():
             ensure_variables_before_submission()
 
             # STEP 2: Fix Read node frame ranges
-            fix_read_node_frame_ranges_for_submission()
+            # ❌ DISABLED: This was forcing expressions even when user wants static values!
+            # If Read nodes have static frame ranges, we should NOT overwrite them.
+            # fix_read_node_frame_ranges_for_submission()
 
             # STEP 3: Delete Viewer nodes (they cause issues in batch mode)
             delete_viewer_nodes_for_batch_mode()
