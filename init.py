@@ -34,6 +34,38 @@ def ensure_variables_for_batch_mode():
 
         print("Multishot: Variables initialized for batch mode")
 
+        # DEBUG: Verify knobs exist and print their values
+        import nuke
+        root = nuke.root()
+        print("Multishot: DEBUG - Verifying root knobs:")
+        for knob_name in ['ep', 'seq', 'shot', 'project', 'PROJ_ROOT', 'IMG_ROOT', 'first_frame', 'last_frame']:
+            if knob_name in root.knobs():
+                value = root[knob_name].value()
+                print("  {} = '{}'".format(knob_name, value))
+            else:
+                print("  {} = MISSING!".format(knob_name))
+
+        # DEBUG: Test if TCL expressions can evaluate these knobs
+        print("Multishot: DEBUG - Testing TCL expression evaluation:")
+        try:
+            # Create a temporary String_Knob to test expression evaluation
+            test_knob = nuke.String_Knob('test_expr', 'test_expr')
+            root.addKnob(test_knob)
+
+            # Test expression
+            test_expr = "[value root.IMG_ROOT][value root.project]/all/scene/[value root.ep]/[value root.seq]/[value root.shot]"
+            root['test_expr'].fromUserText(test_expr)
+
+            # Try to evaluate it
+            evaluated = root['test_expr'].evaluate()
+            print("  Expression: {}".format(test_expr))
+            print("  Evaluates to: {}".format(evaluated))
+
+            # Clean up
+            root.removeKnob(test_knob)
+        except Exception as e:
+            print("  ERROR evaluating expression: {}".format(e))
+
         # Fix Read node frame ranges for batch mode
         fix_read_node_frame_ranges()
 
