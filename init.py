@@ -48,13 +48,18 @@ def ensure_variables_for_batch_mode():
 
         # MANUALLY CREATE KNOBS if the onScriptLoad callback failed!
         print("\nMultishot: Manually creating individual knobs from JSON...")
+        print("DEBUG: Checking for JSON knobs...")
+        print("DEBUG: 'multishot_context' in all_knobs: {}".format('multishot_context' in all_knobs))
+        print("DEBUG: 'multishot_custom' in all_knobs: {}".format('multishot_custom' in all_knobs))
 
         # Create knobs from multishot_context
         if 'multishot_context' in all_knobs:
             context_json = root['multishot_context'].value()
+            print("DEBUG: context_json value: {}".format(repr(context_json)))
             if context_json:
                 try:
                     context_vars = json.loads(context_json)
+                    print("DEBUG: Parsed context_vars: {}".format(context_vars))
                     for key, value in context_vars.items():
                         if key not in root.knobs():
                             knob = nuke.String_Knob(key, key)
@@ -65,13 +70,21 @@ def ensure_variables_for_batch_mode():
                         print("  Set {} = {}".format(key, value))
                 except Exception as e:
                     print("  ERROR parsing multishot_context: {}".format(e))
+                    import traceback
+                    traceback.print_exc()
+            else:
+                print("DEBUG: context_json is empty!")
+        else:
+            print("DEBUG: multishot_context knob does NOT exist!")
 
         # Create knobs from multishot_custom
         if 'multishot_custom' in all_knobs:
             custom_json = root['multishot_custom'].value()
+            print("DEBUG: custom_json value: {}".format(repr(custom_json)))
             if custom_json:
                 try:
                     custom_vars = json.loads(custom_json)
+                    print("DEBUG: Parsed custom_vars: {}".format(custom_vars))
                     for key, value in custom_vars.items():
                         if key in ['PROJ_ROOT', 'IMG_ROOT']:
                             if key not in root.knobs():
@@ -83,6 +96,12 @@ def ensure_variables_for_batch_mode():
                             print("  Set {} = {}".format(key, value))
                 except Exception as e:
                     print("  ERROR parsing multishot_custom: {}".format(e))
+                    import traceback
+                    traceback.print_exc()
+            else:
+                print("DEBUG: custom_json is empty!")
+        else:
+            print("DEBUG: multishot_custom knob does NOT exist!")
 
         print("Multishot: Variables initialized in batch mode")
         print("=" * 80 + "\n")
