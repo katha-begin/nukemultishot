@@ -41,6 +41,15 @@ try:
 
             multishot_menu.addSeparator()
 
+            # Add Deadline submission
+            multishot_menu.addCommand(
+                'Submit to Deadline',
+                'import multishot.deadline; multishot.deadline.submit_to_deadline()',
+                tooltip='Submit to Deadline with automatic environment variable setup'
+            )
+
+            multishot_menu.addSeparator()
+
             # Add utility commands
             multishot_menu.addCommand(
                 'Refresh Context',
@@ -53,7 +62,7 @@ try:
                 'multishot.ui.show_variables_dialog()',
                 tooltip='View and edit current variables'
             )
-            
+
             multishot_menu.addSeparator()
             
             # Add help and about
