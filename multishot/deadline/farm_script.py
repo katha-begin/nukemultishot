@@ -158,28 +158,63 @@ class FarmScriptManager:
         
         return farm_dir
 
+    def _convert_windows_to_linux_path(self, path: str) -> str:
+        """
+        Convert Windows paths to Linux paths for Deadline render farm.
+
+        Args:
+            path: Windows path (e.g., V:/SWA/...)
+
+        Returns:
+            Linux path (e.g., /mnt/igloo_swa_v/SWA/...)
+        """
+        # Path mappings
+        path_mappings = {
+            'V:/': '/mnt/igloo_swa_v/',
+            'V:\\': '/mnt/igloo_swa_v/',
+            'W:/': '/mnt/igloo_swa_w/',
+            'W:\\': '/mnt/igloo_swa_w/',
+            'T:/': '/mnt/ppr_dev_t/',
+            'T:\\': '/mnt/ppr_dev_t/'
+        }
+
+        converted_path = path
+        for win_path, linux_path in path_mappings.items():
+            if converted_path.startswith(win_path):
+                converted_path = converted_path.replace(win_path, linux_path, 1)
+                break
+
+        # Replace backslashes with forward slashes
+        converted_path = converted_path.replace('\\', '/')
+
+        return converted_path
+
     def bake_expressions_to_static(self):
         """
-        Bake all expressions in the script to static values.
+        Bake all expressions in the script to static values and convert to Linux paths.
 
         This includes:
         - Read node file paths and frame ranges
         - Write node file paths
+        - Convert Windows paths (V:/, W:/, T:/) to Linux paths for render farm
         - Any other expressions that need to be evaluated
         """
         try:
             import nuke
 
-            self.logger.info("Baking expressions to static values...")
+            self.logger.info("Baking expressions to static values and converting to Linux paths...")
 
             # Bake Read nodes
             read_count = 0
             for node in nuke.allNodes('Read'):
                 try:
-                    # Bake file path
+                    # Bake file path and convert to Linux
                     if node.knob('file'):
                         file_path = node['file'].evaluate()
-                        node['file'].setValue(file_path)
+                        linux_path = self._convert_windows_to_linux_path(file_path)
+                        node['file'].setValue(linux_path)
+                        if file_path != linux_path:
+                            self.logger.debug(f"Converted path: {file_path} -> {linux_path}")
 
                     # Bake frame range
                     if node.knob('first'):
@@ -200,10 +235,13 @@ class FarmScriptManager:
             write_count = 0
             for node in nuke.allNodes('Write'):
                 try:
-                    # Bake file path
+                    # Bake file path and convert to Linux
                     if node.knob('file'):
                         file_path = node['file'].evaluate()
-                        node['file'].setValue(file_path)
+                        linux_path = self._convert_windows_to_linux_path(file_path)
+                        node['file'].setValue(linux_path)
+                        if file_path != linux_path:
+                            self.logger.debug(f"Converted path: {file_path} -> {linux_path}")
 
                     write_count += 1
                     self.logger.debug(f"Baked Write node: {node.name()}")
@@ -211,7 +249,23 @@ class FarmScriptManager:
                 except Exception as e:
                     self.logger.warning(f"Could not bake Write node {node.name()}: {e}")
 
+            # Convert root knobs (PROJ_ROOT, IMG_ROOT) to Linux paths
+            root_knobs_converted = 0
+            for knob_name in ['PROJ_ROOT', 'IMG_ROOT']:
+                if nuke.root().knob(knob_name):
+                    try:
+                        knob_value = nuke.root()[knob_name].value()
+                        linux_value = self._convert_windows_to_linux_path(knob_value)
+                        if knob_value != linux_value:
+                            nuke.root()[knob_name].setValue(linux_value)
+                            root_knobs_converted += 1
+                            self.logger.debug(f"Converted root knob {knob_name}: {knob_value} -> {linux_value}")
+                    except Exception as e:
+                        self.logger.warning(f"Could not convert root knob {knob_name}: {e}")
+
             self.logger.info(f"Baked {read_count} Read nodes and {write_count} Write nodes")
+            if root_knobs_converted > 0:
+                self.logger.info(f"Converted {root_knobs_converted} root knobs to Linux paths")
 
         except Exception as e:
             self.logger.error(f"Error baking expressions: {e}")
