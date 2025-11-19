@@ -897,7 +897,10 @@ class MultishotManagerDialog(BaseWidget):
                             node.addKnob(knob)
                         node['multishot_original_first'].setValue(original_expr)
 
+                        # Get evaluated value BEFORE clearing expression
                         first_frame = int(node['first'].value())
+                        # Clear expression and set static value
+                        node['first'].clearAnimated()
                         node['first'].setValue(first_frame)
                         self.logger.info(f"Baked Read first: {node.name()} -> {first_frame}")
 
@@ -909,7 +912,10 @@ class MultishotManagerDialog(BaseWidget):
                             node.addKnob(knob)
                         node['multishot_original_last'].setValue(original_expr)
 
+                        # Get evaluated value BEFORE clearing expression
                         last_frame = int(node['last'].value())
+                        # Clear expression and set static value
+                        node['last'].clearAnimated()
                         node['last'].setValue(last_frame)
                         self.logger.info(f"Baked Read last: {node.name()} -> {last_frame}")
 
@@ -990,23 +996,25 @@ class MultishotManagerDialog(BaseWidget):
                         if original_expr:
                             node['file'].fromScript(original_expr)
                             node.removeKnob(node['multishot_original_file'])
-                            self.logger.debug(f"Unbaked Read file: {node.name()}")
+                            self.logger.info(f"Unbaked Read file: {node.name()}")
 
                     # Restore first frame expression
                     if node.knob('multishot_original_first'):
                         original_expr = node['multishot_original_first'].value()
                         if original_expr:
-                            node['first'].fromScript(original_expr)
+                            # For Int_Knob, use setExpression() to restore TCL expressions
+                            node['first'].setExpression(original_expr)
                             node.removeKnob(node['multishot_original_first'])
-                            self.logger.debug(f"Unbaked Read first: {node.name()}")
+                            self.logger.info(f"Unbaked Read first: {node.name()} -> {original_expr}")
 
                     # Restore last frame expression
                     if node.knob('multishot_original_last'):
                         original_expr = node['multishot_original_last'].value()
                         if original_expr:
-                            node['last'].fromScript(original_expr)
+                            # For Int_Knob, use setExpression() to restore TCL expressions
+                            node['last'].setExpression(original_expr)
                             node.removeKnob(node['multishot_original_last'])
-                            self.logger.debug(f"Unbaked Read last: {node.name()}")
+                            self.logger.info(f"Unbaked Read last: {node.name()} -> {original_expr}")
 
                     unbaked_count += 1
 
