@@ -149,19 +149,17 @@ def submit_to_deadline():
                 )
                 return
 
-            # Get Deadline repository path
-            repo_path = _get_deadline_repository_path()
-            if not repo_path:
+            # Get Deadline submission path
+            # This handles both local and remote repositories
+            submission_path = _get_deadline_submission_path()
+            if not submission_path:
                 nuke.message(
-                    "Could not get Deadline repository path.\n\n"
+                    "Could not get Deadline submission path.\n\n"
                     "Please make sure Deadline Client is configured correctly."
                 )
                 return
 
-            # Add Deadline submission path to sys.path
-            submission_path = os.path.join(repo_path, 'submission', 'Nuke', 'Main')
-            print("Deadline submission path: {}".format(submission_path))
-
+            # Check if path exists (it should, since deadlinecommand returned it)
             if not os.path.exists(submission_path):
                 nuke.message(
                     "Deadline submission path not found:\n\n{}\n\n"
@@ -169,6 +167,7 @@ def submit_to_deadline():
                 )
                 return
 
+            # Add to sys.path
             if submission_path not in sys.path:
                 sys.path.insert(0, submission_path)
                 print("Added to sys.path: {}".format(submission_path))
@@ -190,13 +189,11 @@ def submit_to_deadline():
                 "Could not import Deadline submission module.\n\n"
                 "Error: {}\n\n"
                 "DEADLINE_PATH: {}\n"
-                "Repository path: {}\n"
                 "Submission path: {}\n\n"
                 "Please make sure Deadline Client is installed and configured."
             ).format(
                 str(e),
                 os.environ.get('DEADLINE_PATH', 'NOT SET'),
-                repo_path if 'repo_path' in locals() else 'NOT FOUND',
                 submission_path if 'submission_path' in locals() else 'NOT FOUND'
             )
             print(error_msg)
@@ -214,16 +211,26 @@ def submit_to_deadline():
         traceback.print_exc()
 
 
-def _get_deadline_repository_path():
-    """Get the Deadline repository path."""
+def _get_deadline_submission_path():
+    """
+    Get the Deadline submission path for Nuke.
+
+    This uses deadlinecommand to get the submission/Nuke/Main path,
+    which handles both local and remote repositories.
+
+    Returns:
+        str: Path to Deadline submission scripts, or None if not found
+    """
     try:
         import subprocess
+        import errno
 
         deadline_path = os.environ.get('DEADLINE_PATH', '')
         if not deadline_path:
+            print("DEADLINE_PATH not set")
             return None
 
-        # Try different command names
+        # Get deadline command
         if platform.system() == 'Windows':
             deadline_command = os.path.join(deadline_path, 'deadlinecommand.exe')
         else:
@@ -233,28 +240,56 @@ def _get_deadline_repository_path():
             print("Deadline command not found: {}".format(deadline_command))
             return None
 
-        # Run deadlinecommand to get repository path
+        # Setup startupinfo for Windows
         startupinfo = None
         if platform.system() == 'Windows':
-            # Hide console window on Windows
-            startupinfo = subprocess.STARTUPINFO()
-            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            if hasattr(subprocess, '_subprocess') and hasattr(subprocess._subprocess, 'STARTF_USESHOWWINDOW'):
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess._subprocess.STARTF_USESHOWWINDOW
+            elif hasattr(subprocess, 'STARTF_USESHOWWINDOW'):
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
 
-        result = subprocess.check_output(
-            [deadline_command, '-GetRepositoryPath'],
-            startupinfo=startupinfo,
-            stderr=subprocess.STDOUT
-        )
+        # Get repository path with subdirectory
+        # This handles both local and remote repositories
+        args = [deadline_command, '-GetRepositoryPath', 'submission/Nuke/Main']
 
-        if sys.version_info[0] > 2:
-            result = result.decode()
+        attempts = 0
+        path = ""
+        while attempts < 10 and path == "":
+            try:
+                proc = subprocess.Popen(
+                    args,
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    startupinfo=startupinfo
+                )
+                path, errors = proc.communicate()
 
-        repo_path = result.strip().replace('\n', '').replace('\r', '')
-        print("Deadline repository path: {}".format(repo_path))
-        return repo_path
+                if sys.version_info[0] > 2:
+                    path = path.decode()
+
+                path = path.replace('\n', '').replace('\r', '').replace('\\', '/')
+
+            except (OSError, IOError) as e:
+                if e.errno == errno.EINTR:
+                    attempts += 1
+                    if attempts == 10:
+                        print("Failed to get Deadline repository path after 10 attempts")
+                        return None
+                    continue
+                raise
+
+        if path:
+            print("Deadline submission path: {}".format(path))
+            return path
+        else:
+            print("Could not get Deadline submission path")
+            return None
 
     except Exception as e:
-        print("Could not get Deadline repository path: {}".format(e))
+        print("Error getting Deadline submission path: {}".format(e))
         import traceback
         traceback.print_exc()
         return None
