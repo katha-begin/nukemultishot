@@ -125,16 +125,36 @@ class RenderFarmDialog(QtWidgets.QDialog):
         """Detect render order based on node chain dependencies."""
         try:
             import nuke
-            
-            # TODO: Implement dependency detection
-            # For now, just use the order they appear in the script
+            from ..deadline.farm_script import FarmScriptManager
+
             self.logger.info("Auto-detecting chain order...")
-            
-            # Refresh table with current order
+
+            # Get Write node objects
+            write_node_objects = [info['node'] for info in self.write_nodes]
+
+            # Detect dependencies
+            farm_manager = FarmScriptManager()
+            sorted_writes = farm_manager.detect_write_node_dependencies(write_node_objects)
+
+            # Reorder write_nodes list based on sorted order
+            sorted_write_nodes = []
+            for node in sorted_writes:
+                for info in self.write_nodes:
+                    if info['node'] == node:
+                        sorted_write_nodes.append(info)
+                        break
+
+            self.write_nodes = sorted_write_nodes
+
+            # Refresh table with new order
             self._populate_table()
-            
+
+            self.logger.info("Chain order detected successfully")
+
         except Exception as e:
             self.logger.error(f"Error detecting chain order: {e}")
+            import traceback
+            traceback.print_exc()
 
     def _populate_table(self):
         """Populate the table with Write nodes."""

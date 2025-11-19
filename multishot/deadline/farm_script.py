@@ -252,3 +252,133 @@ class FarmScriptManager:
             self.logger.error(f"Error creating farm script: {e}")
             raise
 
+    def detect_write_node_dependencies(self, write_nodes: List) -> List:
+        """
+        Detect dependencies between Write nodes based on node graph.
+
+        Args:
+            write_nodes: List of Write node objects
+
+        Returns:
+            List of Write nodes sorted by dependency order (upstream first)
+        """
+        try:
+            import nuke
+
+            self.logger.info("Detecting Write node dependencies...")
+
+            # Build dependency graph
+            dependencies = {}  # {write_node: [dependent_write_nodes]}
+
+            for write_node in write_nodes:
+                dependencies[write_node] = []
+
+                # Check if this Write node's output is used by other Write nodes
+                for other_write in write_nodes:
+                    if write_node == other_write:
+                        continue
+
+                    # Check if other_write depends on write_node
+                    if self._is_dependent(other_write, write_node):
+                        dependencies[write_node].append(other_write)
+
+            # Topological sort to get render order
+            sorted_writes = self._topological_sort(write_nodes, dependencies)
+
+            self.logger.info(f"Detected render order: {[w.name() for w in sorted_writes]}")
+            return sorted_writes
+
+        except Exception as e:
+            self.logger.error(f"Error detecting dependencies: {e}")
+            # Return original order if detection fails
+            return write_nodes
+
+    def _is_dependent(self, node_a, node_b) -> bool:
+        """
+        Check if node_a depends on node_b (i.e., node_b is upstream of node_a).
+
+        Args:
+            node_a: Downstream node
+            node_b: Potential upstream node
+
+        Returns:
+            True if node_a depends on node_b
+        """
+        try:
+            import nuke
+
+            # Get all dependencies of node_a
+            visited = set()
+            to_visit = [node_a]
+
+            while to_visit:
+                current = to_visit.pop(0)
+
+                if current in visited:
+                    continue
+
+                visited.add(current)
+
+                # Check if we found node_b
+                if current == node_b:
+                    return True
+
+                # Add all inputs to visit list
+                for i in range(current.inputs()):
+                    input_node = current.input(i)
+                    if input_node and input_node not in visited:
+                        to_visit.append(input_node)
+
+            return False
+
+        except Exception as e:
+            self.logger.warning(f"Error checking dependency: {e}")
+            return False
+
+    def _topological_sort(self, nodes: List, dependencies: dict) -> List:
+        """
+        Topological sort of nodes based on dependencies.
+
+        Args:
+            nodes: List of nodes
+            dependencies: Dict of {node: [dependent_nodes]}
+
+        Returns:
+            Sorted list of nodes (upstream first)
+        """
+        try:
+            # Calculate in-degree for each node
+            in_degree = {node: 0 for node in nodes}
+
+            for node, dependents in dependencies.items():
+                for dependent in dependents:
+                    in_degree[dependent] += 1
+
+            # Start with nodes that have no dependencies
+            queue = [node for node in nodes if in_degree[node] == 0]
+            sorted_nodes = []
+
+            while queue:
+                # Sort queue by node name for consistent ordering
+                queue.sort(key=lambda n: n.name())
+
+                node = queue.pop(0)
+                sorted_nodes.append(node)
+
+                # Reduce in-degree for dependent nodes
+                for dependent in dependencies.get(node, []):
+                    in_degree[dependent] -= 1
+                    if in_degree[dependent] == 0:
+                        queue.append(dependent)
+
+            # If not all nodes are sorted, there's a cycle - return original order
+            if len(sorted_nodes) != len(nodes):
+                self.logger.warning("Circular dependency detected, using original order")
+                return nodes
+
+            return sorted_nodes
+
+        except Exception as e:
+            self.logger.error(f"Error in topological sort: {e}")
+            return nodes
+
