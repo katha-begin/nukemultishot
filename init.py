@@ -11,10 +11,11 @@ import sys
 def ensure_variables_for_batch_mode():
     """
     DEBUG: Just print all root knobs to see what's in the script.
-    Do NOT modify anything!
+    Also manually create knobs from JSON if the onScriptLoad callback failed.
     """
     try:
         import nuke
+        import json
         root = nuke.root()
 
         print("\n" + "=" * 80)
@@ -43,18 +44,51 @@ def ensure_variables_for_batch_mode():
             else:
                 print("  {} = MISSING!".format(knob_name))
 
-        # Print a sample Read node's file path to see if expressions are there
-        print("\nSample Read node file paths:")
-        for node in nuke.allNodes('Read'):
-            file_path = node['file'].value()
-            print("  {}: {}".format(node.name(), file_path[:100] if len(file_path) > 100 else file_path))
-            if len(nuke.allNodes('Read')) >= 3:  # Only print first 3
-                break
+        print("=" * 80)
 
+        # MANUALLY CREATE KNOBS if the onScriptLoad callback failed!
+        print("\nMultishot: Manually creating individual knobs from JSON...")
+
+        # Create knobs from multishot_context
+        if 'multishot_context' in all_knobs:
+            context_json = root['multishot_context'].value()
+            if context_json:
+                try:
+                    context_vars = json.loads(context_json)
+                    for key, value in context_vars.items():
+                        if key not in root.knobs():
+                            knob = nuke.String_Knob(key, key)
+                            knob.setFlag(nuke.INVISIBLE)
+                            root.addKnob(knob)
+                            print("  Created knob: {}".format(key))
+                        root[key].setValue(str(value))
+                        print("  Set {} = {}".format(key, value))
+                except Exception as e:
+                    print("  ERROR parsing multishot_context: {}".format(e))
+
+        # Create knobs from multishot_custom
+        if 'multishot_custom' in all_knobs:
+            custom_json = root['multishot_custom'].value()
+            if custom_json:
+                try:
+                    custom_vars = json.loads(custom_json)
+                    for key, value in custom_vars.items():
+                        if key in ['PROJ_ROOT', 'IMG_ROOT']:
+                            if key not in root.knobs():
+                                knob = nuke.String_Knob(key, key)
+                                knob.setFlag(nuke.INVISIBLE)
+                                root.addKnob(knob)
+                                print("  Created knob: {}".format(key))
+                            root[key].setValue(str(value))
+                            print("  Set {} = {}".format(key, value))
+                except Exception as e:
+                    print("  ERROR parsing multishot_custom: {}".format(e))
+
+        print("Multishot: Variables initialized in batch mode")
         print("=" * 80 + "\n")
 
     except Exception as e:
-        print("Multishot: Error in debug: {}".format(e))
+        print("Multishot: Error in batch mode initialization: {}".format(e))
         import traceback
         traceback.print_exc()
 
