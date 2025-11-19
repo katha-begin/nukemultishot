@@ -10,38 +10,51 @@ import sys
 
 def ensure_variables_for_batch_mode():
     """
-    Verify variables in batch mode (render farm).
-
-    CRITICAL: Do NOT create or update variables in batch mode!
-    Deadline has already mapped the paths in the .nk file.
-    We just verify they exist and log their values.
+    DEBUG: Just print all root knobs to see what's in the script.
+    Do NOT modify anything!
     """
     try:
         import nuke
         root = nuke.root()
 
-        print("Multishot: Batch mode detected - verifying variables...")
+        print("\n" + "=" * 80)
+        print("MULTISHOT DEBUG: Printing ALL root knobs")
+        print("=" * 80)
 
-        # DEBUG: Verify knobs exist and print their values
-        # These should already exist from the .nk file with Deadline-mapped paths
-        print("Multishot: DEBUG - Verifying root knobs:")
+        # Print ALL knobs on root
+        all_knobs = root.knobs()
+        print("Total knobs on root: {}".format(len(all_knobs)))
+
+        # Print multishot-related knobs
+        print("\nMultishot JSON knobs:")
+        for knob_name in ['multishot_context', 'multishot_custom', 'multishot_variables']:
+            if knob_name in all_knobs:
+                value = root[knob_name].value()
+                print("  {} = {}".format(knob_name, value))
+            else:
+                print("  {} = MISSING!".format(knob_name))
+
+        # Print individual variable knobs
+        print("\nIndividual variable knobs:")
         for knob_name in ['ep', 'seq', 'shot', 'project', 'PROJ_ROOT', 'IMG_ROOT', 'first_frame', 'last_frame']:
-            if knob_name in root.knobs():
+            if knob_name in all_knobs:
                 value = root[knob_name].value()
                 print("  {} = '{}'".format(knob_name, value))
             else:
                 print("  {} = MISSING!".format(knob_name))
 
-        # Fix Read node frame ranges for batch mode
-        fix_read_node_frame_ranges()
+        # Print a sample Read node's file path to see if expressions are there
+        print("\nSample Read node file paths:")
+        for node in nuke.allNodes('Read'):
+            file_path = node['file'].value()
+            print("  {}: {}".format(node.name(), file_path[:100] if len(file_path) > 100 else file_path))
+            if len(nuke.allNodes('Read')) >= 3:  # Only print first 3
+                break
 
-        # Fix OCIO display settings for batch mode
-        fix_ocio_display_for_batch_mode()
-
-        print("Multishot: Batch mode initialization complete")
+        print("=" * 80 + "\n")
 
     except Exception as e:
-        print("Multishot: Error in batch mode initialization: {}".format(e))
+        print("Multishot: Error in debug: {}".format(e))
         import traceback
         traceback.print_exc()
 
