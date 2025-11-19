@@ -116,12 +116,34 @@ class VariableManager:
 try:
     print("Multishot onScriptLoad: Starting...")
 
-    # Log current root format for debugging
+    # CRITICAL FIX: Ensure format is set correctly in batch mode
+    # When Deadline copies the script, the format might be reset to default (640x480)
+    # We need to restore it from the saved format knob
     root_format = nuke.root()['format'].value()
-    print("Multishot onScriptLoad: Root format = " + str(root_format))
-    print("Multishot onScriptLoad: Root format width = " + str(root_format.width()))
-    print("Multishot onScriptLoad: Root format height = " + str(root_format.height()))
-    print("Multishot onScriptLoad: Root format name = " + str(root_format.name()))
+    print("Multishot onScriptLoad: Current root format = " + str(root_format))
+    print("Multishot onScriptLoad: Current format width = " + str(root_format.width()))
+    print("Multishot onScriptLoad: Current format height = " + str(root_format.height()))
+    print("Multishot onScriptLoad: Current format name = " + str(root_format.name()))
+
+    # Check if format is the default 640x480 (indicates format was not preserved)
+    if root_format.width() == 640 and root_format.height() == 480:
+        print("Multishot onScriptLoad: WARNING - Format is default 640x480, attempting to restore...")
+
+        # Try to restore from saved_format knob (if it exists)
+        if nuke.root().knob('saved_format'):
+            saved_format_name = nuke.root()['saved_format'].value()
+            print("Multishot onScriptLoad: Found saved_format = " + saved_format_name)
+
+            # Try to set the format
+            try:
+                nuke.root()['format'].setValue(saved_format_name)
+                print("Multishot onScriptLoad: Restored format to: " + saved_format_name)
+            except Exception as e:
+                print("Multishot onScriptLoad: ERROR restoring format: " + str(e))
+        else:
+            print("Multishot onScriptLoad: No saved_format knob found")
+    else:
+        print("Multishot onScriptLoad: Format looks correct, no restoration needed")
 
     # Ensure Multishot tab exists
     if 'multishot_tab' not in nuke.root().knobs():
@@ -178,6 +200,9 @@ except Exception as e:
 '''
             root['onScriptLoad'].setValue(callback_code)
             self.logger.debug("Set onScriptLoad callback for batch mode variable initialization")
+
+            # Also save the current format name so it can be restored in batch mode
+            self._save_format_for_batch_mode(root)
 
             # Create custom variables knob if it doesn't exist
             if self.CUSTOM_KNOB not in root.knobs():
@@ -244,6 +269,31 @@ except Exception as e:
             self.logger.error(f"Error ensuring root variables in script: {e}")
 
 
+
+    def _save_format_for_batch_mode(self, root):
+        """
+        Save the current format name to a knob so it can be restored in batch mode.
+
+        This is needed because when Deadline copies the script, the format might be reset.
+        """
+        try:
+            import nuke
+
+            # Get current format
+            current_format = root['format'].value()
+            format_name = current_format.name()
+
+            # Create or update saved_format knob
+            if 'saved_format' not in root.knobs():
+                knob = nuke.String_Knob('saved_format', 'Saved Format')
+                knob.setFlag(nuke.INVISIBLE)
+                root.addKnob(knob)
+
+            root['saved_format'].setValue(format_name)
+            self.logger.info(f"Saved format for batch mode: {format_name} ({current_format.width()}x{current_format.height()})")
+
+        except Exception as e:
+            self.logger.error(f"Error saving format for batch mode: {e}")
 
     def _create_individual_root_knobs(self, root_variables: Dict[str, str]):
         """Create individual knobs for root variables so they can be accessed as [value root.VARIABLE_NAME]."""
