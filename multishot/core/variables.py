@@ -177,8 +177,11 @@ except Exception as e:
             else:
                 self.logger.debug("All root variables already script-embedded")
                 # Ensure individual knobs exist for existing variables
+                # NOTE: In batch mode, Deadline may have already mapped these to Linux paths
+                # We pass the JSON values but _create_individual_root_knobs will NOT overwrite existing knobs
                 root_vars = {k: v for k, v in current_custom.items() if k in required_roots}
                 if root_vars:
+                    self.logger.debug(f"Ensuring individual knobs for root vars (from JSON): {root_vars}")
                     self._create_individual_root_knobs(root_vars)
 
             # Also ensure context variables have individual knobs
