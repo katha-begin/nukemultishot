@@ -850,40 +850,57 @@ class MultishotManagerDialog(BaseWidget):
 
                 self.logger.info(f"Submitting {len(selected_writes)} Write nodes to render farm")
 
-                # Create farm script
-                farm_manager = FarmScriptManager()
-                farm_script_path = farm_manager.create_farm_script(shot_data, script_path)
+                try:
+                    # Create farm script
+                    farm_manager = FarmScriptManager()
+                    self.logger.info("Creating farm script...")
+                    farm_script_path = farm_manager.create_farm_script(shot_data, script_path)
+                    self.logger.info(f"Farm script created: {farm_script_path}")
 
-                # Get frame range
-                first_frame = int(nuke.root()['first_frame'].value())
-                last_frame = int(nuke.root()['last_frame'].value())
-                frame_range = (first_frame, last_frame)
+                    # Get frame range
+                    first_frame = int(nuke.root()['first_frame'].value())
+                    last_frame = int(nuke.root()['last_frame'].value())
+                    frame_range = (first_frame, last_frame)
+                    self.logger.info(f"Frame range: {first_frame}-{last_frame}")
 
-                # Submit to Deadline
-                submitter = DeadlineFarmSubmitter()
-                job_ids = submitter.submit_write_nodes(
-                    farm_script_path,
-                    selected_writes,
-                    shot_data,
-                    frame_range
-                )
-
-                # Show success message
-                if job_ids:
-                    QtWidgets.QMessageBox.information(
-                        self,
-                        "Render Farm Submission",
-                        f"Successfully submitted {len(job_ids)} jobs to Deadline!\n\n"
-                        f"Farm script: {farm_script_path}\n"
-                        f"Frame range: {first_frame}-{last_frame}\n"
-                        f"Job IDs: {', '.join(job_ids)}"
+                    # Submit to Deadline
+                    submitter = DeadlineFarmSubmitter()
+                    self.logger.info("Submitting to Deadline...")
+                    job_ids = submitter.submit_write_nodes(
+                        farm_script_path,
+                        selected_writes,
+                        shot_data,
+                        frame_range
                     )
-                else:
-                    QtWidgets.QMessageBox.warning(
+
+                    # Show success message
+                    if job_ids:
+                        QtWidgets.QMessageBox.information(
+                            self,
+                            "Render Farm Submission",
+                            f"Successfully submitted {len(job_ids)} jobs to Deadline!\n\n"
+                            f"Farm script: {farm_script_path}\n"
+                            f"Frame range: {first_frame}-{last_frame}\n"
+                            f"Job IDs: {', '.join(job_ids)}"
+                        )
+                    else:
+                        QtWidgets.QMessageBox.warning(
+                            self,
+                            "Render Farm Submission",
+                            "No jobs were submitted to Deadline.\n\n"
+                            "Check the Script Editor for error details."
+                        )
+
+                except Exception as submit_error:
+                    self.logger.error(f"Submission error: {submit_error}")
+                    import traceback
+                    traceback.print_exc()
+                    QtWidgets.QMessageBox.critical(
                         self,
-                        "Render Farm Submission",
-                        "No jobs were submitted to Deadline."
+                        "Submission Error",
+                        f"Failed to submit to Deadline:\n\n{submit_error}"
                     )
+                    return
 
         except Exception as e:
             self.logger.error(f"Error submitting to render farm: {e}")

@@ -97,26 +97,29 @@ class DeadlineFarmSubmitter:
         """Get Deadline command path."""
         try:
             import platform
-            
+
             deadline_path = os.environ.get('DEADLINE_PATH', '')
             if not deadline_path:
-                self.logger.error("DEADLINE_PATH not set")
-                return None
-            
+                error_msg = "DEADLINE_PATH environment variable is not set"
+                self.logger.error(error_msg)
+                raise Exception(error_msg)
+
             if platform.system() == 'Windows':
                 deadline_command = os.path.join(deadline_path, 'deadlinecommand.exe')
             else:
                 deadline_command = os.path.join(deadline_path, 'deadlinecommand')
-            
+
             if not os.path.exists(deadline_command):
-                self.logger.error(f"Deadline command not found: {deadline_command}")
-                return None
-            
+                error_msg = f"Deadline command not found at: {deadline_command}\nDEADLINE_PATH={deadline_path}"
+                self.logger.error(error_msg)
+                raise Exception(error_msg)
+
+            self.logger.info(f"Found Deadline command: {deadline_command}")
             return deadline_command
-            
+
         except Exception as e:
             self.logger.error(f"Error getting Deadline command: {e}")
-            return None
+            raise
 
     def _create_job_info_file(
         self,
