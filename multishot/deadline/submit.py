@@ -44,35 +44,47 @@ def fix_viewer_processes_for_batch_mode():
                 if node.knob('viewerProcess'):
                     current_vp = node.knob('viewerProcess').value()
 
+                    print("  DEBUG: Viewer '{}' current viewerProcess: '{}'".format(node.name(), current_vp))
+
                     # Check if viewerProcess has invalid values for batch mode
                     if current_vp and current_vp != 'None':
                         # Get available values
                         vp_knob = node.knob('viewerProcess')
                         if hasattr(vp_knob, 'values'):
                             available_values = vp_knob.values()
+                            print("  DEBUG: Available values: {}".format(available_values))
 
                             # Try to set to 'None'
                             if 'None' in available_values:
                                 vp_knob.setValue('None')
-                                print("  Viewer '{}': viewerProcess '{}' -> 'None'".format(node.name(), current_vp))
+                                new_value = vp_knob.value()
+                                print("  Viewer '{}': viewerProcess '{}' -> '{}'".format(node.name(), current_vp, new_value))
                                 fixed_count += 1
                             elif 'none' in available_values:
                                 vp_knob.setValue('none')
-                                print("  Viewer '{}': viewerProcess '{}' -> 'none'".format(node.name(), current_vp))
+                                new_value = vp_knob.value()
+                                print("  Viewer '{}': viewerProcess '{}' -> '{}'".format(node.name(), current_vp, new_value))
                                 fixed_count += 1
                             elif len(available_values) > 0:
                                 # Use first available value
                                 vp_knob.setValue(available_values[0])
-                                print("  Viewer '{}': viewerProcess '{}' -> '{}'".format(node.name(), current_vp, available_values[0]))
+                                new_value = vp_knob.value()
+                                print("  Viewer '{}': viewerProcess '{}' -> '{}'".format(node.name(), current_vp, new_value))
                                 fixed_count += 1
+                            else:
+                                print("  WARNING: No available values found for viewerProcess!")
                         else:
                             # Try setting to empty string
+                            print("  DEBUG: viewerProcess knob has no 'values()' method, trying empty string")
                             vp_knob.setValue('')
-                            print("  Viewer '{}': viewerProcess '{}' -> '' (empty)".format(node.name(), current_vp))
+                            new_value = vp_knob.value()
+                            print("  Viewer '{}': viewerProcess '{}' -> '{}'".format(node.name(), current_vp, new_value))
                             fixed_count += 1
 
             except Exception as e:
                 print("  Warning: Could not fix Viewer '{}': {}".format(node.name(), e))
+                import traceback
+                traceback.print_exc()
 
         if fixed_count > 0:
             print("Fixed {} Viewer node(s)".format(fixed_count))
