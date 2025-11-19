@@ -59,14 +59,16 @@ def fix_ocio_display_for_batch_mode():
     try:
         import nuke
 
-        # Get OCIO config
-        ocio_config_path = nuke.root().knob('customOCIOConfigPath')
-        if not ocio_config_path or not ocio_config_path.value():
-            print("Multishot: No custom OCIO config set, skipping OCIO fix")
-            return
+        # CRITICAL: Always fix Output Transform, even with default OCIO
+        # Nuke 16's Output Transform adds display/view knobs that cause errors in batch mode
+        print("Multishot: Fixing Output Transform for batch mode...")
 
-        print("Multishot: Fixing OCIO settings for batch mode...")
-        print("  OCIO config: {}".format(ocio_config_path.value()))
+        # Get OCIO config (may be custom or default)
+        ocio_config_path = nuke.root().knob('customOCIOConfigPath')
+        if ocio_config_path and ocio_config_path.value():
+            print("  OCIO config: {}".format(ocio_config_path.value()))
+        else:
+            print("  OCIO config: default")
 
         # Map of display device names to proper colorspaces
         display_to_colorspace_map = {
