@@ -70,40 +70,57 @@ def get_environment_variables():
 
 def _patch_deadline_submission():
     """
-    Monkey-patch the Deadline submission to inject environment variables.
+    Monkey-patch the Deadline submission to inject environment variables into the job.
+
+    This patches the SubmitJob function to add environment variables to the job info
+    before submission, so they get passed to the render nodes.
     """
     try:
         import SubmitNukeToDeadline
 
-        # Store original function
-        if not hasattr(SubmitNukeToDeadline, '_multishot_original_submit'):
-            SubmitNukeToDeadline._multishot_original_submit = SubmitNukeToDeadline.SubmitToDeadline
+        # Store original SubmitJob function
+        if not hasattr(SubmitNukeToDeadline, '_multishot_original_submit_job'):
+            SubmitNukeToDeadline._multishot_original_submit_job = SubmitNukeToDeadline.SubmitJob
 
-        def patched_submit():
-            """Patched submission that adds environment variables."""
-            # Set environment variables before submission
+        def patched_submit_job(dialog, root):
+            """Patched SubmitJob that adds environment variables to job info."""
+            # Get environment variables to add
             env_vars = get_environment_variables()
 
             print("\n" + "=" * 70)
             print("MULTISHOT: Adding environment variables to Deadline job")
             print("=" * 70)
 
-            for key, value in env_vars.items():
-                os.environ[key] = value
-                print("  {} = {}".format(key, value))
+            # Add environment variables to the dialog's environment list
+            # The dialog has an environmentList that stores env vars for the job
+            if hasattr(dialog, 'environmentList'):
+                for key, value in env_vars.items():
+                    # Add to environment list
+                    env_entry = "{}={}".format(key, value)
+                    if env_entry not in dialog.environmentList:
+                        dialog.environmentList.append(env_entry)
+                        print("  Added: {} = {}".format(key, value))
+                    else:
+                        print("  Already exists: {} = {}".format(key, value))
+            else:
+                print("  Warning: Dialog has no environmentList attribute")
+                for key, value in env_vars.items():
+                    print("  Would add: {} = {}".format(key, value))
 
             print("=" * 70 + "\n")
 
-            # Call original submission
-            return SubmitNukeToDeadline._multishot_original_submit()
+            # Call original SubmitJob
+            return SubmitNukeToDeadline._multishot_original_submit_job(dialog, root)
 
         # Replace with patched version
-        SubmitNukeToDeadline.SubmitToDeadline = patched_submit
+        SubmitNukeToDeadline.SubmitJob = patched_submit_job
 
         return True
 
     except Exception as e:
         print("Warning: Could not patch Deadline submission: {}".format(e))
+        import traceback
+        traceback.print_exc()
         return False
 
 
