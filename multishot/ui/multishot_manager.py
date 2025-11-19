@@ -92,8 +92,8 @@ class MultishotManagerDialog(BaseWidget):
         self.shots_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.shots_table.setAlternatingRowColors(True)
 
-        # Setup columns: # | Shot | Set Shot | Version | Remove
-        columns = ['#', 'Shot', 'Set Shot', 'Version', 'Remove']
+        # Setup columns: # | Shot | Set Shot | Version | Remove | Render
+        columns = ['#', 'Shot', 'Set Shot', 'Version', 'Remove', 'Render']
         self.shots_table.setColumnCount(len(columns))
         self.shots_table.setHorizontalHeaderLabels(columns)
 
@@ -105,6 +105,7 @@ class MultishotManagerDialog(BaseWidget):
         header.resizeSection(2, 120)  # Set Shot
         header.resizeSection(3, 150)  # Version
         header.resizeSection(4, 80)   # Remove
+        header.resizeSection(5, 80)   # Render
 
         layout.addWidget(self.shots_table)
 
@@ -375,6 +376,15 @@ class MultishotManagerDialog(BaseWidget):
                 remove_btn.setStyleSheet("background-color: #90EE90;")
             remove_btn.clicked.connect(lambda checked=False, i=idx: self._remove_shot(i))
             self.shots_table.setCellWidget(row, 4, remove_btn)
+
+            # Column 5: Render button
+            render_btn = QtWidgets.QPushButton("Render")
+            render_btn.setMaximumWidth(80)
+            render_btn.setToolTip("Submit to render farm")
+            if is_current:
+                render_btn.setStyleSheet("background-color: #90EE90;")
+            render_btn.clicked.connect(lambda checked=False, sd=shot_data: self._submit_to_render_farm(sd))
+            self.shots_table.setCellWidget(row, 5, render_btn)
 
         except Exception as e:
             self.logger.error(f"Error adding shot row: {e}")
@@ -804,6 +814,47 @@ class MultishotManagerDialog(BaseWidget):
                 self,
                 "Error",
                 f"Failed to remove shot:\n{e}"
+            )
+
+    def _submit_to_render_farm(self, shot_data):
+        """Submit shot to render farm with baked expressions."""
+        try:
+            import nuke
+            from .render_farm_dialog import RenderFarmDialog
+
+            # Check if script is saved
+            script_path = nuke.root().name()
+            if script_path == 'Root' or not script_path:
+                QtWidgets.QMessageBox.warning(
+                    self,
+                    "Script Not Saved",
+                    "Please save your script before submitting to render farm."
+                )
+                return
+
+            # Show render farm dialog
+            dialog = RenderFarmDialog(shot_data, parent=self)
+            if dialog.exec_() == QtWidgets.QDialog.Accepted:
+                # Get selected Write nodes and order
+                selected_writes = dialog.get_selected_writes()
+                if selected_writes:
+                    self.logger.info(f"Submitting {len(selected_writes)} Write nodes to render farm")
+                    # TODO: Implement actual submission
+                    QtWidgets.QMessageBox.information(
+                        self,
+                        "Render Farm Submission",
+                        f"Submitted {len(selected_writes)} Write nodes to render farm.\n\n"
+                        f"(Implementation in progress)"
+                    )
+
+        except Exception as e:
+            self.logger.error(f"Error submitting to render farm: {e}")
+            import traceback
+            traceback.print_exc()
+            QtWidgets.QMessageBox.critical(
+                self,
+                "Error",
+                f"Failed to submit to render farm:\n{e}"
             )
 
     def _add_shots(self):
