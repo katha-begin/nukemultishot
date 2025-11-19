@@ -371,7 +371,9 @@ except Exception as e:
             True if successful
         """
         try:
-            context_json = json.dumps(variables, indent=2)
+            # Use compact JSON without indentation to avoid Deadline path mapping corruption
+            # Deadline's path mapping corrupts backslashes in JSON (e.g., \n becomes /n)
+            context_json = json.dumps(variables, separators=(',', ':'))
             success = self._set_knob_value(self.CONTEXT_KNOB, context_json)
 
             if success:
@@ -417,7 +419,9 @@ except Exception as e:
             True if successful
         """
         try:
-            custom_json = json.dumps(variables, indent=2)
+            # Use compact JSON without indentation to avoid Deadline path mapping corruption
+            # Deadline's path mapping corrupts backslashes in JSON (e.g., \n becomes /n)
+            custom_json = json.dumps(variables, separators=(',', ':'))
             success = self._set_knob_value(self.CUSTOM_KNOB, custom_json)
 
             if success:
