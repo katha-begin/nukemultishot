@@ -10,33 +10,20 @@ import sys
 
 def ensure_variables_for_batch_mode():
     """
-    Ensure variables are accessible in batch mode (render farm).
-    This is called when a script is loaded in batch mode to ensure
-    individual knobs exist for TCL expression evaluation.
+    Verify variables in batch mode (render farm).
+
+    CRITICAL: Do NOT create or update variables in batch mode!
+    Deadline has already mapped the paths in the .nk file.
+    We just verify they exist and log their values.
     """
     try:
-        # Add multishot package to Python path
-        current_dir = os.path.dirname(__file__)
-        if current_dir not in sys.path:
-            sys.path.insert(0, current_dir)
-
-        # Import and ensure variables are accessible
-        from multishot.core.variables import VariableManager
-        vm = VariableManager()
-
-        # Ensure individual knobs exist for context variables (ep, seq, shot, project)
-        vm._ensure_context_variable_knobs()
-
-        # Ensure individual knobs exist for root variables (PROJ_ROOT, IMG_ROOT)
-        custom_vars = vm.get_custom_variables()
-        if custom_vars:
-            vm._create_individual_root_knobs(custom_vars)
-
-        print("Multishot: Variables initialized for batch mode")
-
-        # DEBUG: Verify knobs exist and print their values
         import nuke
         root = nuke.root()
+
+        print("Multishot: Batch mode detected - verifying variables...")
+
+        # DEBUG: Verify knobs exist and print their values
+        # These should already exist from the .nk file with Deadline-mapped paths
         print("Multishot: DEBUG - Verifying root knobs:")
         for knob_name in ['ep', 'seq', 'shot', 'project', 'PROJ_ROOT', 'IMG_ROOT', 'first_frame', 'last_frame']:
             if knob_name in root.knobs():
@@ -45,35 +32,16 @@ def ensure_variables_for_batch_mode():
             else:
                 print("  {} = MISSING!".format(knob_name))
 
-        # DEBUG: Test if TCL expressions can evaluate these knobs
-        print("Multishot: DEBUG - Testing TCL expression evaluation:")
-        try:
-            # Create a temporary String_Knob to test expression evaluation
-            test_knob = nuke.String_Knob('test_expr', 'test_expr')
-            root.addKnob(test_knob)
-
-            # Test expression
-            test_expr = "[value root.IMG_ROOT][value root.project]/all/scene/[value root.ep]/[value root.seq]/[value root.shot]"
-            root['test_expr'].fromUserText(test_expr)
-
-            # Try to evaluate it
-            evaluated = root['test_expr'].evaluate()
-            print("  Expression: {}".format(test_expr))
-            print("  Evaluates to: {}".format(evaluated))
-
-            # Clean up
-            root.removeKnob(test_knob)
-        except Exception as e:
-            print("  ERROR evaluating expression: {}".format(e))
-
         # Fix Read node frame ranges for batch mode
         fix_read_node_frame_ranges()
 
         # Fix OCIO display settings for batch mode
         fix_ocio_display_for_batch_mode()
 
+        print("Multishot: Batch mode initialization complete")
+
     except Exception as e:
-        print("Multishot: Error initializing variables in batch mode: {}".format(e))
+        print("Multishot: Error in batch mode initialization: {}".format(e))
         import traceback
         traceback.print_exc()
 
