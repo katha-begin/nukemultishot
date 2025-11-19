@@ -77,12 +77,14 @@ def _patch_deadline_submission():
         if not hasattr(SubmitNukeToDeadline, '_multishot_original_call_deadline_command'):
             SubmitNukeToDeadline._multishot_original_call_deadline_command = SubmitNukeToDeadline.CallDeadlineCommand
 
-        def patched_call_deadline_command(args, hide_window=True, read_stdout=True):
+        def patched_call_deadline_command(args, hide_window=True):
             """
             Patched CallDeadlineCommand that adds environment variables to job info files.
 
             This intercepts the deadlinecommand call and modifies the job info file
             to include required environment variables.
+
+            Note: CallDeadlineCommand signature is (args, hide_window=True)
             """
             # Check if this is a job submission command
             # Format: deadlinecommand <job_info_file> <plugin_info_file> [aux_files...]
@@ -131,7 +133,7 @@ def _patch_deadline_submission():
                         traceback.print_exc()
 
             # Call original function
-            return SubmitNukeToDeadline._multishot_original_call_deadline_command(args, hide_window, read_stdout)
+            return SubmitNukeToDeadline._multishot_original_call_deadline_command(args, hide_window)
 
         # Replace with patched version
         SubmitNukeToDeadline.CallDeadlineCommand = patched_call_deadline_command
