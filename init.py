@@ -48,16 +48,16 @@ def initialize_multishot():
         current_dir = os.path.dirname(__file__)
         if current_dir not in sys.path:
             sys.path.insert(0, current_dir)
-            print(f"Multishot: Added {current_dir} to Python path")
+            print("Multishot: Added {} to Python path".format(current_dir))
 
         # Import and initialize multishot
         import multishot
-        print(f"Multishot: Imported multishot v{multishot.__version__}")
+        print("Multishot: Imported multishot v{}".format(multishot.__version__))
 
         success = multishot.initialize()
 
         if success:
-            print("✅ Multishot Workflow System v{} loaded successfully".format(multishot.__version__))
+            print("Multishot Workflow System v{} loaded successfully".format(multishot.__version__))
             print("   - Menu: Multishot > Browser")
             print("   - Toolbar: Look for 'Multishot' in the toolbar")
             print("   - Shortcuts: Ctrl+Shift+M (Browser), F5 (Refresh Context)")
@@ -69,14 +69,14 @@ def initialize_multishot():
 
                 variable_manager = VariableManager()
                 loader = load_gizmos_and_toolsets(variable_manager)
-                print(f"   - Loaded: {loader.get_loaded_summary()}")
+                print("   - Loaded: {}".format(loader.get_loaded_summary()))
             except Exception as e:
-                print(f"   ⚠️  Warning: Could not load gizmos/toolsets: {e}")
+                print("   Warning: Could not load gizmos/toolsets: {}".format(e))
         else:
-            print("❌ Failed to initialize Multishot Workflow System")
+            print("Failed to initialize Multishot Workflow System")
 
     except Exception as e:
-        print(f"❌ Error loading Multishot Workflow System: {e}")
+        print("Error loading Multishot Workflow System: {}".format(e))
         import traceback
         traceback.print_exc()
 

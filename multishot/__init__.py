@@ -14,28 +14,25 @@ __version__ = "1.0.0"
 __author__ = "Multishot Development Team"
 __email__ = "support@multishot.com"
 
-# Import core modules
+# Import core modules (safe for batch mode)
 from . import core
 from . import nodes
-from . import ui
 from . import utils
 
-# Import main functionality
+# Import main functionality (safe for batch mode)
 from .core.variables import VariableManager
 from .core.scanner import DirectoryScanner
 from .core.paths import PathResolver
 from .core.context import ContextDetector
 
-# Import UI components
-from .ui.browser import MultishotBrowser
-from .ui.node_manager import NodeManager
-from .ui.multishot_manager import MultishotManagerDialog
-
-# Import utilities
+# Import utilities (safe for batch mode)
 from .utils.config import ConfigManager
 from .utils.logging import get_logger
 from .utils.version import VersionManager
 from .utils.approval import ApprovalManager
+
+# UI components are imported lazily to avoid Qt/display errors in batch mode
+# They will be imported when needed by get_ui_class() functions
 
 # Global instances
 _variable_manager = None
@@ -63,6 +60,36 @@ def get_logger():
         from .utils.logging import get_logger as _get_logger
         _logger = _get_logger('multishot')
     return _logger
+
+def get_multishot_browser():
+    """
+    Get MultishotBrowser class (lazy import to avoid Qt errors in batch mode).
+
+    Returns:
+        MultishotBrowser class
+    """
+    from .ui.browser import MultishotBrowser
+    return MultishotBrowser
+
+def get_node_manager():
+    """
+    Get NodeManager class (lazy import to avoid Qt errors in batch mode).
+
+    Returns:
+        NodeManager class
+    """
+    from .ui.node_manager import NodeManager
+    return NodeManager
+
+def get_multishot_manager_dialog():
+    """
+    Get MultishotManagerDialog class (lazy import to avoid Qt errors in batch mode).
+
+    Returns:
+        MultishotManagerDialog class
+    """
+    from .ui.multishot_manager import MultishotManagerDialog
+    return MultishotManagerDialog
 
 def initialize():
     """Initialize the multishot system."""
@@ -128,19 +155,38 @@ def cleanup():
 
 # Export main classes and functions
 __all__ = [
+    # Core classes (safe for batch mode)
     'VariableManager',
     'DirectoryScanner',
     'PathResolver',
     'ContextDetector',
-    'MultishotBrowser',
-    'NodeManager',
-    'MultishotManagerDialog',
     'ConfigManager',
     'VersionManager',
     'ApprovalManager',
+    # Lazy import functions for UI classes (to avoid Qt errors in batch mode)
+    'get_multishot_browser',
+    'get_node_manager',
+    'get_multishot_manager_dialog',
+    # Global instance getters
     'get_variable_manager',
     'get_config_manager',
     'get_logger',
+    # Initialization functions
     'initialize',
     'cleanup'
 ]
+
+# Provide backward compatibility by creating lazy properties
+def __getattr__(name):
+    """
+    Lazy import for UI components to avoid Qt/display errors in batch mode.
+    This allows code like 'from multishot import MultishotBrowser' to still work,
+    but only imports the UI component when it's actually accessed.
+    """
+    if name == 'MultishotBrowser':
+        return get_multishot_browser()
+    elif name == 'NodeManager':
+        return get_node_manager()
+    elif name == 'MultishotManagerDialog':
+        return get_multishot_manager_dialog()
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
