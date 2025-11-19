@@ -890,7 +890,13 @@ class MultishotManagerDialog(BaseWidget):
 
                     # Bake frame range
                     if node.knob('first') and has_expression(node['first']):
-                        original_expr = node['first'].toScript()
+                        # Get the expression string (not the full script representation)
+                        anim = node['first'].animation(0)
+                        if anim:
+                            original_expr = anim.expression()
+                        else:
+                            original_expr = node['first'].toScript()
+
                         if not node.knob('multishot_original_first'):
                             knob = nuke.String_Knob('multishot_original_first', 'Original First Expression')
                             knob.setFlag(nuke.INVISIBLE)
@@ -905,7 +911,13 @@ class MultishotManagerDialog(BaseWidget):
                         self.logger.info(f"Baked Read first: {node.name()} -> {first_frame}")
 
                     if node.knob('last') and has_expression(node['last']):
-                        original_expr = node['last'].toScript()
+                        # Get the expression string (not the full script representation)
+                        anim = node['last'].animation(0)
+                        if anim:
+                            original_expr = anim.expression()
+                        else:
+                            original_expr = node['last'].toScript()
+
                         if not node.knob('multishot_original_last'):
                             knob = nuke.String_Knob('multishot_original_last', 'Original Last Expression')
                             knob.setFlag(nuke.INVISIBLE)
