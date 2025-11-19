@@ -264,36 +264,40 @@ def fix_ocio_display_for_batch_mode():
             except Exception as e:
                 print("  Warning: Could not fix Write node '{}': {}".format(node.name(), e))
 
-        # Fix Viewer nodes (set to default/none in batch mode)
+        # Fix Viewer nodes (disable viewerProcess in batch mode)
         for node in nuke.allNodes('Viewer'):
             try:
                 # In batch mode, viewers don't need specific display settings
-                # Set to 'None' or 'default' to avoid errors
+                # The viewerProcess knob is an enumeration - we need to find valid values
                 if node.knob('viewerProcess'):
                     current_vp = node.knob('viewerProcess').value()
                     print("  DEBUG: Viewer '{}' viewerProcess: '{}'".format(node.name(), current_vp))
-                    node.knob('viewerProcess').setValue('None')
-                    print("  Viewer '{}': set viewerProcess '{}' -> 'None'".format(node.name(), current_vp))
-                    fixed_count += 1
 
-                # Also check for display/view knobs on Viewer nodes
-                if node.knob('display'):
-                    current_display = node.knob('display').value()
-                    if current_display and current_display != "default":
-                        print("  DEBUG: Viewer '{}' has display: '{}'".format(node.name(), current_display))
-                        # Try to fix invalid display names
-                        if "Display" in current_display or current_display == "default":
-                            try:
-                                import PyOpenColorIO as OCIO
-                                config = OCIO.GetCurrentConfig()
-                                default_display = config.getDefaultDisplay()
-                                if default_display:
-                                    node.knob('display').setValue(default_display)
-                                    print("  Viewer '{}': fixed display '{}' -> '{}'".format(
-                                        node.name(), current_display, default_display))
-                                    fixed_count += 1
-                            except Exception as ocio_error:
-                                print("  Warning: Could not fix Viewer display: {}".format(ocio_error))
+                    # Get available values for viewerProcess
+                    vp_knob = node.knob('viewerProcess')
+                    if hasattr(vp_knob, 'values'):
+                        available_values = vp_knob.values()
+                        print("  DEBUG: Available viewerProcess values: {}".format(available_values))
+
+                        # Try to set to 'None', 'none', or the first available value
+                        if 'None' in available_values:
+                            vp_knob.setValue('None')
+                            print("  Viewer '{}': set viewerProcess '{}' -> 'None'".format(node.name(), current_vp))
+                            fixed_count += 1
+                        elif 'none' in available_values:
+                            vp_knob.setValue('none')
+                            print("  Viewer '{}': set viewerProcess '{}' -> 'none'".format(node.name(), current_vp))
+                            fixed_count += 1
+                        elif len(available_values) > 0:
+                            # Use the first available value as fallback
+                            vp_knob.setValue(available_values[0])
+                            print("  Viewer '{}': set viewerProcess '{}' -> '{}'".format(node.name(), current_vp, available_values[0]))
+                            fixed_count += 1
+                    else:
+                        # If we can't get available values, try setting to empty string
+                        vp_knob.setValue('')
+                        print("  Viewer '{}': set viewerProcess '{}' -> '' (empty)".format(node.name(), current_vp))
+                        fixed_count += 1
 
             except Exception as e:
                 print("  Warning: Could not fix Viewer '{}': {}".format(node.name(), e))
