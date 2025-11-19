@@ -106,19 +106,37 @@ def fix_ocio_display_for_batch_mode():
                             node.name(), current_cs, new_cs))
                         fixed_count += 1
 
-                # CRITICAL: Disable Output Transform (Nuke 16 feature)
-                # This adds display/view knobs that cause "Bad value for display" errors
-                if node.knob('useOCIODisplayView'):
-                    if node.knob('useOCIODisplayView').value():
-                        node.knob('useOCIODisplayView').setValue(False)
-                        print("  Write '{}': disabled Output Transform".format(node.name()))
-                        fixed_count += 1
+                # CRITICAL: Fix invalid display/view values in Output Transform
+                # If display="default", it's not a valid display name in any OCIO config
+                # We need to query the OCIO config for valid display/view values
+                if node.knob('useOCIODisplayView') and node.knob('useOCIODisplayView').value():
+                    display_knob = node.knob('display')
+                    view_knob = node.knob('view')
 
-                    # Clear display and view knobs to prevent errors
-                    if node.knob('display'):
-                        node.knob('display').setValue('')
-                    if node.knob('view'):
-                        node.knob('view').setValue('')
+                    if display_knob and view_knob:
+                        current_display = display_knob.value()
+                        current_view = view_knob.value()
+
+                        # If display is "default" or empty, query OCIO for valid values
+                        if current_display == "default" or current_display == "":
+                            try:
+                                # Get available displays from OCIO config
+                                import PyOpenColorIO as OCIO
+                                config = OCIO.GetCurrentConfig()
+
+                                # Get the default display
+                                default_display = config.getDefaultDisplay()
+                                if default_display:
+                                    # Get the default view for this display
+                                    default_view = config.getDefaultView(default_display)
+
+                                    display_knob.setValue(default_display)
+                                    view_knob.setValue(default_view)
+                                    print("  Write '{}': fixed Output Transform display '{}' -> '{}', view '{}' -> '{}'".format(
+                                        node.name(), current_display, default_display, current_view, default_view))
+                                    fixed_count += 1
+                            except Exception as ocio_error:
+                                print("  Warning: Could not query OCIO config for Write '{}': {}".format(node.name(), ocio_error))
 
             except Exception as e:
                 print("  Warning: Could not fix Write node '{}': {}".format(node.name(), e))
