@@ -46,6 +46,24 @@ def ensure_variables_for_batch_mode():
 
         print("=" * 80)
 
+        # DEBUG: Check a Read node's frame range
+        print("\nDEBUG: Checking Read node frame ranges...")
+        for read_node in nuke.allNodes('Read'):
+            if 'Multishot' in read_node.name():
+                print("  Read node: {}".format(read_node.name()))
+                if read_node.knob('first'):
+                    first_val = read_node['first'].value()
+                    first_expr = read_node['first'].toScript()
+                    print("    first value: {}".format(first_val))
+                    print("    first expression: {}".format(first_expr))
+                if read_node.knob('last'):
+                    last_val = read_node['last'].value()
+                    last_expr = read_node['last'].toScript()
+                    print("    last value: {}".format(last_val))
+                    print("    last expression: {}".format(last_expr))
+                break  # Just check first MultishotRead node
+        print("=" * 80)
+
         # MANUALLY CREATE KNOBS if the onScriptLoad callback failed!
         print("\nMultishot: Manually creating individual knobs from JSON...")
         print("DEBUG: Checking for JSON knobs...")
