@@ -120,49 +120,32 @@ def register_ocio_displays_for_batch_mode():
     Output Transform or viewer settings in batch mode.
 
     Reference: https://community.foundry.com/discuss/topic/97288/nuke-viewer-process
+
+    NOTE: In Nuke, OCIO displays are automatically available from the OCIO config.
+    The key is ensuring the OCIO environment variable is set correctly, which is
+    handled by the Deadline submission script.
+
+    This function exists as a placeholder for future enhancements if needed.
     """
     try:
         import nuke
-        import PyOpenColorIO as OCIO
 
-        print("Multishot: Registering OCIO displays for batch mode...")
+        print("Multishot: Checking OCIO configuration for batch mode...")
 
-        # Get the current OCIO config
-        try:
-            config = OCIO.GetCurrentConfig()
-        except Exception as e:
-            print("  Warning: Could not get OCIO config: {}".format(e))
-            return
+        # Get OCIO config path
+        ocio_knob = nuke.root().knob('customOCIOConfigPath')
+        if ocio_knob and ocio_knob.value():
+            ocio_path = ocio_knob.value()
+            print("  OCIO config: {}".format(ocio_path))
+        else:
+            print("  OCIO config: using default")
 
-        # Get all displays
-        num_displays = config.getNumDisplays()
-        print("  Found {} displays in OCIO config".format(num_displays))
+        # In Nuke, OCIO displays and views are automatically available from the config
+        # No explicit registration is needed - Nuke reads them directly from the OCIO config
+        print("Multishot: OCIO displays are available from config")
 
-        # Register each display and its views
-        for i in range(num_displays):
-            display_name = config.getDisplay(i)
-
-            # Get views for this display
-            num_views = config.getNumViews(display_name)
-            views = [config.getView(display_name, j) for j in range(num_views)]
-
-            print("  Display '{}': {} views".format(display_name, len(views)))
-
-            # Register the display with Nuke
-            # This makes the display available in batch mode
-            try:
-                # Note: In Nuke, displays are automatically available from OCIO config
-                # We just need to make sure the config is loaded
-                pass
-            except Exception as e:
-                print("  Warning: Could not register display '{}': {}".format(display_name, e))
-
-        print("Multishot: OCIO displays registered successfully")
-
-    except ImportError:
-        print("  Warning: PyOpenColorIO not available - skipping OCIO display registration")
     except Exception as e:
-        print("  Warning: Could not register OCIO displays: {}".format(e))
+        print("  Warning: Could not check OCIO config: {}".format(e))
         import traceback
         traceback.print_exc()
 
