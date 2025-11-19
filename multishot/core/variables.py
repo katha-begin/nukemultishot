@@ -116,6 +116,13 @@ class VariableManager:
 try:
     print("Multishot onScriptLoad: Starting...")
 
+    # Log current root format for debugging
+    root_format = nuke.root()['format'].value()
+    print("Multishot onScriptLoad: Root format = " + str(root_format))
+    print("Multishot onScriptLoad: Root format width = " + str(root_format.width()))
+    print("Multishot onScriptLoad: Root format height = " + str(root_format.height()))
+    print("Multishot onScriptLoad: Root format name = " + str(root_format.name()))
+
     # Ensure Multishot tab exists
     if 'multishot_tab' not in nuke.root().knobs():
         tab = nuke.Tab_Knob('multishot_tab', 'Multishot')
