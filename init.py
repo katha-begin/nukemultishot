@@ -152,7 +152,9 @@ def register_ocio_displays_for_batch_mode():
         # These will be available in the viewerProcess dropdown
         try:
             # Register a "None" viewer process for batch mode
-            nuke.ViewerProcess.register("None", nuke.createNode, ("Viewer", ""), ())
+            # Syntax: register(name, call, args, kwargs)
+            # kwargs must be a dict, not tuple!
+            nuke.ViewerProcess.register("None", nuke.createNode, ("Viewer", ""), {})
             print("  Registered: None")
         except Exception as e:
             print("  Warning: Could not register 'None' viewer process: {}".format(e))
@@ -169,7 +171,7 @@ def register_ocio_displays_for_batch_mode():
             try:
                 # Register as OCIO display transform
                 # The viewer process will use OCIODisplay node internally
-                nuke.ViewerProcess.register(vp_name, nuke.createNode, ("OCIODisplay", ""), ())
+                nuke.ViewerProcess.register(vp_name, nuke.createNode, ("OCIODisplay", ""), {})
                 print("  Registered: {}".format(vp_name))
             except Exception as e:
                 print("  Warning: Could not register '{}': {}".format(vp_name, e))
@@ -252,46 +254,15 @@ def fix_ocio_display_for_batch_mode():
                             node.name(), current_cs, new_cs))
                         fixed_count += 1
 
-                # CRITICAL: Fix invalid display/view values in Output Transform
-                # If display="default", it's not a valid display name in any OCIO config
-                # We need to query the OCIO config for valid display/view values
-                if node.knob('useOCIODisplayView') and node.knob('useOCIODisplayView').value():
-                    display_knob = node.knob('display')
-                    view_knob = node.knob('view')
-
-                    if display_knob and view_knob:
-                        current_display = display_knob.value()
-                        current_view = view_knob.value()
-
-                        # If display is "default" or empty, query OCIO for valid values
-                        if current_display == "default" or current_display == "":
-                            try:
-                                # Get available displays from OCIO config
-                                import PyOpenColorIO as OCIO
-                                config = OCIO.GetCurrentConfig()
-
-                                print("  DEBUG: Write '{}' has invalid display '{}', querying OCIO...".format(node.name(), current_display))
-
-                                # Get the default display
-                                default_display = config.getDefaultDisplay()
-                                print("  DEBUG: OCIO default display: '{}'".format(default_display))
-
-                                if default_display:
-                                    # Get the default view for this display
-                                    default_view = config.getDefaultView(default_display)
-                                    print("  DEBUG: OCIO default view for '{}': '{}'".format(default_display, default_view))
-
-                                    display_knob.setValue(default_display)
-                                    view_knob.setValue(default_view)
-                                    print("  Write '{}': fixed Output Transform display '{}' -> '{}', view '{}' -> '{}'".format(
-                                        node.name(), current_display, default_display, current_view, default_view))
-                                    fixed_count += 1
-                                else:
-                                    print("  DEBUG: OCIO config has no default display!")
-                            except Exception as ocio_error:
-                                print("  Warning: Could not query OCIO config for Write '{}': {}".format(node.name(), ocio_error))
-                                import traceback
-                                traceback.print_exc()
+                # CRITICAL: Disable Output Transform in batch mode
+                # Output Transform is a creative decision that should be baked into the colorspace knob
+                # In batch mode, we just want to render with the colorspace setting, not apply display transforms
+                if node.knob('useOCIODisplayView'):
+                    if node.knob('useOCIODisplayView').value():
+                        # Disable Output Transform
+                        node.knob('useOCIODisplayView').setValue(False)
+                        print("  Write '{}': disabled Output Transform for batch mode".format(node.name()))
+                        fixed_count += 1
 
             except Exception as e:
                 print("  Warning: Could not fix Write node '{}': {}".format(node.name(), e))
