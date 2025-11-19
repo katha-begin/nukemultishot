@@ -92,8 +92,8 @@ class MultishotManagerDialog(BaseWidget):
         self.shots_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.shots_table.setAlternatingRowColors(True)
 
-        # Setup columns: # | Shot | Set Shot | Version | Remove | Bake | Unbake | Render
-        columns = ['#', 'Shot', 'Set Shot', 'Version', 'Remove', 'Bake', 'Unbake', 'Render']
+        # Setup columns: # | Shot | Set Shot | Version | Remove | Bake | Unbake | Save | Render
+        columns = ['#', 'Shot', 'Set Shot', 'Version', 'Remove', 'Bake', 'Unbake', 'Save', 'Render']
         self.shots_table.setColumnCount(len(columns))
         self.shots_table.setHorizontalHeaderLabels(columns)
 
@@ -107,7 +107,8 @@ class MultishotManagerDialog(BaseWidget):
         header.resizeSection(4, 80)   # Remove
         header.resizeSection(5, 80)   # Bake
         header.resizeSection(6, 80)   # Unbake
-        header.resizeSection(7, 80)   # Render
+        header.resizeSection(7, 80)   # Save
+        header.resizeSection(8, 80)   # Render
 
         layout.addWidget(self.shots_table)
 
@@ -397,14 +398,23 @@ class MultishotManagerDialog(BaseWidget):
             unbake_btn.clicked.connect(lambda checked=False, sd=shot_data: self._unbake_expressions(sd))
             self.shots_table.setCellWidget(row, 6, unbake_btn)
 
-            # Column 7: Render button
+            # Column 7: Save button
+            save_btn = QtWidgets.QPushButton("Save")
+            save_btn.setMaximumWidth(80)
+            save_btn.setToolTip("Save script to shot directory")
+            if is_current:
+                save_btn.setStyleSheet("background-color: #90EE90;")
+            save_btn.clicked.connect(lambda checked=False, sd=shot_data: self._save_to_shot_directory(sd))
+            self.shots_table.setCellWidget(row, 7, save_btn)
+
+            # Column 8: Render button
             render_btn = QtWidgets.QPushButton("Render")
             render_btn.setMaximumWidth(80)
             render_btn.setToolTip("Submit to render farm")
             if is_current:
                 render_btn.setStyleSheet("background-color: #90EE90;")
             render_btn.clicked.connect(lambda checked=False, sd=shot_data: self._submit_to_render_farm(sd))
-            self.shots_table.setCellWidget(row, 7, render_btn)
+            self.shots_table.setCellWidget(row, 8, render_btn)
 
         except Exception as e:
             self.logger.error(f"Error adding shot row: {e}")
@@ -1064,6 +1074,99 @@ class MultishotManagerDialog(BaseWidget):
                 self,
                 "Error",
                 f"Failed to unbake expressions:\n{e}"
+            )
+
+    def _save_to_shot_directory(self, shot_data):
+        """Save Nuke script to target shot directory in the background."""
+        try:
+            import nuke
+            import os
+
+            # Get PROJ_ROOT
+            proj_root = self.variable_manager.get_variable('PROJ_ROOT')
+            if not proj_root:
+                QtWidgets.QMessageBox.warning(
+                    self,
+                    "Missing PROJ_ROOT",
+                    "PROJ_ROOT variable is not set. Cannot determine save path."
+                )
+                return
+
+            # Remove trailing slash
+            if proj_root.endswith('/') or proj_root.endswith('\\'):
+                proj_root = proj_root[:-1]
+
+            # Build shot directory path
+            # Format: {PROJ_ROOT}/{project}/all/scene/{ep}/{seq}/{shot}/comp/version/
+            shot_dir = os.path.join(
+                proj_root,
+                shot_data['project'],
+                'all',
+                'scene',
+                shot_data['ep'],
+                shot_data['seq'],
+                shot_data['shot'],
+                'comp',
+                'version'
+            )
+
+            # Create directory if it doesn't exist
+            if not os.path.exists(shot_dir):
+                try:
+                    os.makedirs(shot_dir)
+                    self.logger.info(f"Created directory: {shot_dir}")
+                except Exception as e:
+                    QtWidgets.QMessageBox.critical(
+                        self,
+                        "Directory Error",
+                        f"Failed to create directory:\n{shot_dir}\n\nError: {e}"
+                    )
+                    return
+
+            # Get current script name or generate default
+            current_script = nuke.root().name()
+            if current_script == 'Root' or not current_script:
+                # Generate default filename
+                # Format: {ep}_{seq}_{shot}_comp_v001.nk
+                filename = f"{shot_data['ep']}_{shot_data['seq']}_{shot_data['shot']}_comp_v001.nk"
+            else:
+                # Use current script name
+                filename = os.path.basename(current_script)
+
+            # Build full save path
+            save_path = os.path.join(shot_dir, filename)
+
+            # Confirm save
+            reply = QtWidgets.QMessageBox.question(
+                self,
+                "Save Script",
+                f"Save script to:\n{save_path}\n\nContinue?",
+                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
+            )
+
+            if reply != QtWidgets.QMessageBox.Yes:
+                return
+
+            # Save script in background (overwrite=1 means no dialog)
+            self.logger.info(f"Saving script to: {save_path}")
+            nuke.scriptSaveAs(save_path, overwrite=1)
+
+            self.logger.info(f"Script saved successfully: {save_path}")
+
+            QtWidgets.QMessageBox.information(
+                self,
+                "Save Complete",
+                f"Script saved to:\n{save_path}"
+            )
+
+        except Exception as e:
+            self.logger.error(f"Error saving script: {e}")
+            import traceback
+            traceback.print_exc()
+            QtWidgets.QMessageBox.critical(
+                self,
+                "Error",
+                f"Failed to save script:\n{e}"
             )
 
     def _submit_to_render_farm(self, shot_data):
