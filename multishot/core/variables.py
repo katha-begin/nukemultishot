@@ -163,40 +163,6 @@ try:
     else:
         print("Multishot onScriptLoad: multishot_custom knob NOT FOUND!")
 
-    # Ensure project format is set correctly for batch mode
-    # Check if there's a format knob in root
-    if nuke.root().knob('project_format'):
-        format_str = nuke.root()['project_format'].value()
-        print("Multishot onScriptLoad: project_format = " + format_str)
-        if format_str and 'x' in format_str:
-            try:
-                # Parse format string (e.g., "2048x1152")
-                parts = format_str.split('x')
-                if len(parts) == 2:
-                    width = int(parts[0])
-                    height = int(parts[1])
-
-                    # Check if this format already exists
-                    format_name = "Project_{}x{}".format(width, height)
-                    existing_format = None
-                    for fmt in nuke.formats():
-                        if fmt.name() == format_name:
-                            existing_format = fmt
-                            break
-
-                    if not existing_format:
-                        # Create new format
-                        nuke.addFormat("{} {} 0 0 {} {} 1.0 {}".format(width, height, width, height, format_name))
-                        print("Multishot onScriptLoad: Created format: {}".format(format_name))
-
-                    # Set as root format
-                    nuke.root()['format'].setValue(format_name)
-                    print("Multishot onScriptLoad: Set root format to: {}".format(format_name))
-            except Exception as e:
-                print("Multishot onScriptLoad: ERROR setting format: " + str(e))
-    else:
-        print("Multishot onScriptLoad: No project_format knob found, using default format")
-
     print("Multishot: Variables initialized from onScriptLoad callback")
 except Exception as e:
     print("Multishot: Error in onScriptLoad callback: " + str(e))
