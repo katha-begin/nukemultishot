@@ -52,6 +52,12 @@ def ensure_variables_for_batch_mode():
         print("DEBUG: 'multishot_context' in all_knobs: {}".format('multishot_context' in all_knobs))
         print("DEBUG: 'multishot_custom' in all_knobs: {}".format('multishot_custom' in all_knobs))
 
+        # Ensure Multishot tab exists
+        if 'multishot_tab' not in root.knobs():
+            tab = nuke.Tab_Knob('multishot_tab', 'Multishot')
+            root.addKnob(tab)
+            print("DEBUG: Created Multishot tab")
+
         # Create knobs from multishot_context
         if 'multishot_context' in all_knobs:
             context_json = root['multishot_context'].value()

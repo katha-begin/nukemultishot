@@ -55,7 +55,13 @@ def fix_invisible_knobs():
                 print(f"  Removed: {knob_name}")
         
         print("\n✨ Creating new knobs WITHOUT +INVISIBLE flag...")
-        
+
+        # Create Multishot tab if it doesn't exist
+        if 'multishot_tab' not in root.knobs():
+            tab = nuke.Tab_Knob('multishot_tab', 'Multishot')
+            root.addKnob(tab)
+            print("  Created Multishot tab")
+
         # Recreate knobs WITHOUT +INVISIBLE flag
         for knob_name in knobs_to_fix:
             if knob_name in saved_values:

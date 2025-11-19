@@ -88,9 +88,12 @@ class VariableManager:
             import nuke
             root = nuke.root()
 
-            # DON'T create knobs with +INVISIBLE flag in User tab - Deadline strips them!
-            # Instead, store them as built-in root knobs without any tab
-            # We'll use the onScriptLoad callback to recreate individual knobs from JSON
+            # Create Multishot tab if it doesn't exist
+            # This ensures all our knobs are in a dedicated tab, not User or Deadline tab
+            if 'multishot_tab' not in root.knobs():
+                tab = nuke.Tab_Knob('multishot_tab', 'Multishot')
+                root.addKnob(tab)
+                self.logger.debug("Created Multishot tab")
 
             # Create variables knob if it doesn't exist
             if self.VARIABLES_KNOB not in root.knobs():
@@ -112,6 +115,12 @@ class VariableManager:
             callback_code = '''import json
 try:
     print("Multishot onScriptLoad: Starting...")
+
+    # Ensure Multishot tab exists
+    if 'multishot_tab' not in nuke.root().knobs():
+        tab = nuke.Tab_Knob('multishot_tab', 'Multishot')
+        nuke.root().addKnob(tab)
+        print("Multishot onScriptLoad: Created Multishot tab")
 
     # Ensure individual knobs exist for context variables
     if nuke.root().knob('multishot_context'):
@@ -235,6 +244,12 @@ except Exception as e:
             import nuke
             root = nuke.root()
 
+            # Ensure Multishot tab exists
+            if 'multishot_tab' not in root.knobs():
+                tab = nuke.Tab_Knob('multishot_tab', 'Multishot')
+                root.addKnob(tab)
+                self.logger.debug("Created Multishot tab")
+
             for key, value in root_variables.items():
                 # Check if knob already exists
                 if key not in root.knobs():
@@ -283,6 +298,12 @@ except Exception as e:
         try:
             import nuke
             root = nuke.root()
+
+            # Ensure Multishot tab exists
+            if 'multishot_tab' not in root.knobs():
+                tab = nuke.Tab_Knob('multishot_tab', 'Multishot')
+                root.addKnob(tab)
+                self.logger.debug("Created Multishot tab")
 
             for key, value in context_variables.items():
                 # Check if knob already exists
