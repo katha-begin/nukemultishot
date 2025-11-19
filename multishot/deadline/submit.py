@@ -88,7 +88,7 @@ def _patch_deadline_submission():
         # Store original open function
         original_open = builtins.open
 
-        def patched_submit_job(dialog, root):
+        def patched_submit_job(*args, **kwargs):
             """Patched SubmitJob that intercepts file writes to add environment variables."""
 
             # Track if we've added env vars
@@ -151,8 +151,8 @@ def _patch_deadline_submission():
             builtins.open = patched_open
 
             try:
-                # Call original SubmitJob
-                return SubmitNukeToDeadline._multishot_original_submit_job(dialog, root)
+                # Call original SubmitJob with all arguments
+                return SubmitNukeToDeadline._multishot_original_submit_job(*args, **kwargs)
             finally:
                 # Restore original open function
                 builtins.open = original_open
