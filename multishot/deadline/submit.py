@@ -18,85 +18,142 @@ import platform
 import re
 
 
-def fix_viewer_processes_for_batch_mode():
+def delete_viewer_nodes_for_batch_mode():
     """
-    Fix Viewer nodes in the current script to be compatible with batch mode.
+    Delete Viewer nodes before submitting to Deadline.
 
-    This fixes viewerProcess settings that cause errors in batch mode:
-    - "ACES 1.0 - SDR Video (sRGB - Display)" -> "None"
-    - Any viewerProcess with display names -> "None"
-
-    This must be called BEFORE submitting to Deadline, so the script is already
-    fixed when it's loaded on render nodes.
+    Viewer nodes can cause issues in batch mode and are not needed for rendering.
+    This is the safest approach - just remove them before submission.
     """
     try:
         import nuke
 
         print("\n" + "=" * 70)
-        print("MULTISHOT: Fixing Viewer nodes for batch mode")
+        print("MULTISHOT: Removing Viewer nodes for batch mode")
         print("=" * 70)
 
-        fixed_count = 0
+        viewer_nodes = nuke.allNodes('Viewer')
+        deleted_count = 0
 
-        # Fix all Viewer nodes
-        for node in nuke.allNodes('Viewer'):
+        for node in viewer_nodes:
             try:
-                if node.knob('viewerProcess'):
-                    current_vp = node.knob('viewerProcess').value()
-
-                    print("  DEBUG: Viewer '{}' current viewerProcess: '{}'".format(node.name(), current_vp))
-
-                    # Check if viewerProcess has invalid values for batch mode
-                    if current_vp and current_vp != 'None':
-                        # Get available values
-                        vp_knob = node.knob('viewerProcess')
-                        if hasattr(vp_knob, 'values'):
-                            available_values = vp_knob.values()
-                            print("  DEBUG: Available values: {}".format(available_values))
-
-                            # Try to set to 'None'
-                            if 'None' in available_values:
-                                vp_knob.setValue('None')
-                                new_value = vp_knob.value()
-                                print("  Viewer '{}': viewerProcess '{}' -> '{}'".format(node.name(), current_vp, new_value))
-                                fixed_count += 1
-                            elif 'none' in available_values:
-                                vp_knob.setValue('none')
-                                new_value = vp_knob.value()
-                                print("  Viewer '{}': viewerProcess '{}' -> '{}'".format(node.name(), current_vp, new_value))
-                                fixed_count += 1
-                            elif len(available_values) > 0:
-                                # Use first available value
-                                vp_knob.setValue(available_values[0])
-                                new_value = vp_knob.value()
-                                print("  Viewer '{}': viewerProcess '{}' -> '{}'".format(node.name(), current_vp, new_value))
-                                fixed_count += 1
-                            else:
-                                print("  WARNING: No available values found for viewerProcess!")
-                        else:
-                            # Try setting to empty string
-                            print("  DEBUG: viewerProcess knob has no 'values()' method, trying empty string")
-                            vp_knob.setValue('')
-                            new_value = vp_knob.value()
-                            print("  Viewer '{}': viewerProcess '{}' -> '{}'".format(node.name(), current_vp, new_value))
-                            fixed_count += 1
-
+                node_name = node.name()
+                nuke.delete(node)
+                print("  Deleted Viewer node: {}".format(node_name))
+                deleted_count += 1
             except Exception as e:
-                print("  Warning: Could not fix Viewer '{}': {}".format(node.name(), e))
-                import traceback
-                traceback.print_exc()
+                print("  Warning: Could not delete Viewer '{}': {}".format(node.name(), e))
 
-        if fixed_count > 0:
-            print("Fixed {} Viewer node(s)".format(fixed_count))
+        if deleted_count > 0:
+            print("Deleted {} Viewer node(s)".format(deleted_count))
             print("=" * 70 + "\n")
             return True
         else:
-            print("No Viewer nodes needed fixing")
+            print("No Viewer nodes to delete")
             print("=" * 70 + "\n")
             return False
 
     except Exception as e:
-        print("ERROR: Could not fix Viewer nodes: {}".format(e))
+        print("ERROR: Could not delete Viewer nodes: {}".format(e))
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def fix_read_node_frame_ranges_for_submission():
+    """
+    Fix Read node frame ranges before submission.
+
+    Ensures all Read nodes use proper TCL expressions for first/last frames
+    instead of hardcoded values that may be incorrect.
+    """
+    try:
+        import nuke
+
+        print("\n" + "=" * 70)
+        print("MULTISHOT: Fixing Read node frame ranges")
+        print("=" * 70)
+
+        fixed_count = 0
+
+        for node in nuke.allNodes('Read'):
+            try:
+                node_name = node.name()
+
+                # Reset first/last to use root knobs
+                if node.knob('first'):
+                    node['first'].fromUserText('[value root.first_frame]')
+                    fixed_count += 1
+
+                if node.knob('last'):
+                    node['last'].fromUserText('[value root.last_frame]')
+
+                print("  Fixed Read node '{}': frame range now uses root knobs".format(node_name))
+
+            except Exception as e:
+                print("  Warning: Could not fix Read node '{}': {}".format(node.name(), e))
+
+        if fixed_count > 0:
+            print("Fixed {} Read node(s)".format(fixed_count))
+            print("=" * 70 + "\n")
+            return True
+        else:
+            print("No Read nodes to fix")
+            print("=" * 70 + "\n")
+            return False
+
+    except Exception as e:
+        print("ERROR: Could not fix Read node frame ranges: {}".format(e))
+        import traceback
+        traceback.print_exc()
+        return False
+
+
+def ensure_variables_before_submission():
+    """
+    Ensure all multishot variables are properly set before submission.
+
+    This creates individual knobs for all variables so they're embedded
+    in the script file and available on render nodes.
+    """
+    try:
+        import nuke
+
+        print("\n" + "=" * 70)
+        print("MULTISHOT: Ensuring variables are embedded in script")
+        print("=" * 70)
+
+        # Add multishot package to Python path
+        current_dir = os.path.dirname(os.path.dirname(__file__))
+        if current_dir not in sys.path:
+            sys.path.insert(0, current_dir)
+
+        from multishot.core.variables import VariableManager
+        vm = VariableManager()
+
+        # Ensure context variables have individual knobs
+        vm._ensure_context_variable_knobs()
+        print("  Context variables (ep, seq, shot, project) embedded")
+
+        # Ensure root variables have individual knobs
+        custom_vars = vm.get_custom_variables()
+        if custom_vars:
+            vm._create_individual_root_knobs(custom_vars)
+            print("  Root variables (PROJ_ROOT, IMG_ROOT) embedded")
+
+        # Print current values for verification
+        root = nuke.root()
+        print("\n  Current variable values:")
+        for key in ['project', 'ep', 'seq', 'shot', 'PROJ_ROOT', 'IMG_ROOT']:
+            if root.knob(key):
+                value = root[key].value()
+                print("    {} = {}".format(key, value))
+
+        print("=" * 70 + "\n")
+        return True
+
+    except Exception as e:
+        print("ERROR: Could not ensure variables: {}".format(e))
         import traceback
         traceback.print_exc()
         print("=" * 70 + "\n")
@@ -305,14 +362,19 @@ def submit_to_deadline():
             import SubmitNukeToDeadline
             print("Successfully imported SubmitNukeToDeadline")
 
-            # Fix Viewer nodes for batch mode compatibility
-            # This must be done BEFORE submission so the script is already fixed
-            fix_viewer_processes_for_batch_mode()
+            # STEP 1: Ensure all variables are embedded in the script
+            ensure_variables_before_submission()
 
-            # Patch the submission to add our environment variables
+            # STEP 2: Fix Read node frame ranges
+            fix_read_node_frame_ranges_for_submission()
+
+            # STEP 3: Delete Viewer nodes (they cause issues in batch mode)
+            delete_viewer_nodes_for_batch_mode()
+
+            # STEP 4: Patch the submission to add our environment variables
             _patch_deadline_submission()
 
-            # Open submission dialog
+            # STEP 5: Open submission dialog
             print("Opening Deadline submission dialog...")
             SubmitNukeToDeadline.SubmitToDeadline()
 
