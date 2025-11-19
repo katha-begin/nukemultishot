@@ -111,41 +111,73 @@ def register_ocio_viewer_processes():
 
 def register_ocio_displays_for_batch_mode():
     """
-    Register OCIO displays and views for batch mode.
+    Register OCIO displays as viewer processes for batch mode.
 
     According to Foundry documentation, viewer processes must be registered in init.py
     (not menu.py) so they're available in non-GUI sessions (batch mode).
 
-    This prevents "Bad value for display" errors when loading scripts with
-    Output Transform or viewer settings in batch mode.
+    This prevents "Bad value for viewerProcess" errors when loading scripts with
+    custom viewer processes in batch mode.
 
     Reference: https://community.foundry.com/discuss/topic/97288/nuke-viewer-process
 
-    NOTE: In Nuke, OCIO displays are automatically available from the OCIO config.
-    The key is ensuring the OCIO environment variable is set correctly, which is
-    handled by the Deadline submission script.
-
-    This function exists as a placeholder for future enhancements if needed.
+    The trick is to unregister default viewer processes and register OCIO-based ones.
     """
     try:
         import nuke
 
-        print("Multishot: Checking OCIO configuration for batch mode...")
+        print("Multishot: Registering OCIO viewer processes for batch mode...")
 
-        # Get OCIO config path
-        ocio_knob = nuke.root().knob('customOCIOConfigPath')
-        if ocio_knob and ocio_knob.value():
-            ocio_path = ocio_knob.value()
-            print("  OCIO config: {}".format(ocio_path))
-        else:
-            print("  OCIO config: using default")
+        # Unregister default viewer processes
+        # This is necessary to avoid conflicts with OCIO-based viewer processes
+        try:
+            nuke.ViewerProcess.unregister('sRGB')
+            print("  Unregistered: sRGB")
+        except:
+            pass
 
-        # In Nuke, OCIO displays and views are automatically available from the config
-        # No explicit registration is needed - Nuke reads them directly from the OCIO config
-        print("Multishot: OCIO displays are available from config")
+        try:
+            nuke.ViewerProcess.unregister('rec709')
+            print("  Unregistered: rec709")
+        except:
+            pass
+
+        try:
+            nuke.ViewerProcess.unregister('rec1886')
+            print("  Unregistered: rec1886")
+        except:
+            pass
+
+        # Register OCIO-based viewer processes
+        # These will be available in the viewerProcess dropdown
+        try:
+            # Register a "None" viewer process for batch mode
+            nuke.ViewerProcess.register("None", nuke.createNode, ("Viewer", ""), ())
+            print("  Registered: None")
+        except Exception as e:
+            print("  Warning: Could not register 'None' viewer process: {}".format(e))
+
+        # Register OCIO display transforms as viewer processes
+        # Format: "View Name (Display Name)"
+        ocio_viewer_processes = [
+            "ACES 1.0 - SDR Video (sRGB - Display)",
+            "ACES 1.0 - SDR Video (Rec.1886 Rec.709 - Display)",
+            "Un-tone-mapped (sRGB - Display)",
+        ]
+
+        for vp_name in ocio_viewer_processes:
+            try:
+                # Register as OCIO display transform
+                # The viewer process will use OCIODisplay node internally
+                nuke.ViewerProcess.register(vp_name, nuke.createNode, ("OCIODisplay", ""), ())
+                print("  Registered: {}".format(vp_name))
+            except Exception as e:
+                print("  Warning: Could not register '{}': {}".format(vp_name, e))
+
+        print("Multishot: OCIO viewer processes registered")
 
     except Exception as e:
-        print("  Warning: Could not check OCIO config: {}".format(e))
+        print("  Warning: Could not register OCIO viewer processes: {}".format(e))
         import traceback
         traceback.print_exc()
 
