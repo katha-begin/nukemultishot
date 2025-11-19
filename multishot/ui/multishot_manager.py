@@ -92,8 +92,8 @@ class MultishotManagerDialog(BaseWidget):
         self.shots_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.shots_table.setAlternatingRowColors(True)
 
-        # Setup columns: # | Shot | Set Shot | Version | Remove | Render
-        columns = ['#', 'Shot', 'Set Shot', 'Version', 'Remove', 'Render']
+        # Setup columns: # | Shot | Set Shot | Version | Remove | Bake | Unbake | Render
+        columns = ['#', 'Shot', 'Set Shot', 'Version', 'Remove', 'Bake', 'Unbake', 'Render']
         self.shots_table.setColumnCount(len(columns))
         self.shots_table.setHorizontalHeaderLabels(columns)
 
@@ -105,7 +105,9 @@ class MultishotManagerDialog(BaseWidget):
         header.resizeSection(2, 120)  # Set Shot
         header.resizeSection(3, 150)  # Version
         header.resizeSection(4, 80)   # Remove
-        header.resizeSection(5, 80)   # Render
+        header.resizeSection(5, 80)   # Bake
+        header.resizeSection(6, 80)   # Unbake
+        header.resizeSection(7, 80)   # Render
 
         layout.addWidget(self.shots_table)
 
@@ -377,14 +379,32 @@ class MultishotManagerDialog(BaseWidget):
             remove_btn.clicked.connect(lambda checked=False, i=idx: self._remove_shot(i))
             self.shots_table.setCellWidget(row, 4, remove_btn)
 
-            # Column 5: Render button
+            # Column 5: Bake button
+            bake_btn = QtWidgets.QPushButton("Bake")
+            bake_btn.setMaximumWidth(80)
+            bake_btn.setToolTip("Bake all expressions to static values")
+            if is_current:
+                bake_btn.setStyleSheet("background-color: #90EE90;")
+            bake_btn.clicked.connect(lambda checked=False, sd=shot_data: self._bake_expressions(sd))
+            self.shots_table.setCellWidget(row, 5, bake_btn)
+
+            # Column 6: Unbake button
+            unbake_btn = QtWidgets.QPushButton("Unbake")
+            unbake_btn.setMaximumWidth(80)
+            unbake_btn.setToolTip("Restore expressions from static values")
+            if is_current:
+                unbake_btn.setStyleSheet("background-color: #90EE90;")
+            unbake_btn.clicked.connect(lambda checked=False, sd=shot_data: self._unbake_expressions(sd))
+            self.shots_table.setCellWidget(row, 6, unbake_btn)
+
+            # Column 7: Render button
             render_btn = QtWidgets.QPushButton("Render")
             render_btn.setMaximumWidth(80)
             render_btn.setToolTip("Submit to render farm")
             if is_current:
                 render_btn.setStyleSheet("background-color: #90EE90;")
             render_btn.clicked.connect(lambda checked=False, sd=shot_data: self._submit_to_render_farm(sd))
-            self.shots_table.setCellWidget(row, 5, render_btn)
+            self.shots_table.setCellWidget(row, 7, render_btn)
 
         except Exception as e:
             self.logger.error(f"Error adding shot row: {e}")
@@ -814,6 +834,205 @@ class MultishotManagerDialog(BaseWidget):
                 self,
                 "Error",
                 f"Failed to remove shot:\n{e}"
+            )
+
+    def _bake_expressions(self, shot_data):
+        """Bake all expressions to static values for current shot."""
+        try:
+            import nuke
+
+            # Confirm action
+            reply = QtWidgets.QMessageBox.question(
+                self,
+                "Bake Expressions",
+                "This will bake all Read and Write node expressions to static values.\n\n"
+                "Are you sure you want to continue?",
+                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
+            )
+
+            if reply != QtWidgets.QMessageBox.Yes:
+                return
+
+            self.logger.info("Baking expressions to static values...")
+
+            baked_count = 0
+
+            # Bake Read nodes
+            for node in nuke.allNodes('Read'):
+                try:
+                    # Store original expressions in user knobs for unbaking
+                    if node.knob('file'):
+                        # Check if it has an expression
+                        if node['file'].hasExpression():
+                            original_expr = node['file'].toScript()
+                            # Store original expression
+                            if not node.knob('multishot_original_file'):
+                                knob = nuke.String_Knob('multishot_original_file', 'Original File Expression')
+                                knob.setFlag(nuke.INVISIBLE)
+                                node.addKnob(knob)
+                            node['multishot_original_file'].setValue(original_expr)
+
+                            # Bake to static value
+                            evaluated_path = node['file'].evaluate()
+                            node['file'].setValue(evaluated_path)
+                            self.logger.debug(f"Baked Read file: {node.name()}")
+
+                    # Bake frame range
+                    if node.knob('first') and node['first'].hasExpression():
+                        original_expr = node['first'].toScript()
+                        if not node.knob('multishot_original_first'):
+                            knob = nuke.String_Knob('multishot_original_first', 'Original First Expression')
+                            knob.setFlag(nuke.INVISIBLE)
+                            node.addKnob(knob)
+                        node['multishot_original_first'].setValue(original_expr)
+
+                        first_frame = int(node['first'].value())
+                        node['first'].setValue(first_frame)
+                        self.logger.debug(f"Baked Read first: {node.name()}")
+
+                    if node.knob('last') and node['last'].hasExpression():
+                        original_expr = node['last'].toScript()
+                        if not node.knob('multishot_original_last'):
+                            knob = nuke.String_Knob('multishot_original_last', 'Original Last Expression')
+                            knob.setFlag(nuke.INVISIBLE)
+                            node.addKnob(knob)
+                        node['multishot_original_last'].setValue(original_expr)
+
+                        last_frame = int(node['last'].value())
+                        node['last'].setValue(last_frame)
+                        self.logger.debug(f"Baked Read last: {node.name()}")
+
+                    baked_count += 1
+
+                except Exception as e:
+                    self.logger.warning(f"Could not bake Read node {node.name()}: {e}")
+
+            # Bake Write nodes
+            for node in nuke.allNodes('Write'):
+                try:
+                    if node.knob('file'):
+                        if node['file'].hasExpression():
+                            original_expr = node['file'].toScript()
+                            # Store original expression
+                            if not node.knob('multishot_original_file'):
+                                knob = nuke.String_Knob('multishot_original_file', 'Original File Expression')
+                                knob.setFlag(nuke.INVISIBLE)
+                                node.addKnob(knob)
+                            node['multishot_original_file'].setValue(original_expr)
+
+                            # Bake to static value
+                            evaluated_path = node['file'].evaluate()
+                            node['file'].setValue(evaluated_path)
+                            self.logger.debug(f"Baked Write file: {node.name()}")
+
+                    baked_count += 1
+
+                except Exception as e:
+                    self.logger.warning(f"Could not bake Write node {node.name()}: {e}")
+
+            self.logger.info(f"Baked {baked_count} nodes")
+
+            QtWidgets.QMessageBox.information(
+                self,
+                "Bake Complete",
+                f"Successfully baked expressions in {baked_count} nodes.\n\n"
+                f"Original expressions are stored and can be restored using 'Unbake'."
+            )
+
+        except Exception as e:
+            self.logger.error(f"Error baking expressions: {e}")
+            import traceback
+            traceback.print_exc()
+            QtWidgets.QMessageBox.critical(
+                self,
+                "Error",
+                f"Failed to bake expressions:\n{e}"
+            )
+
+    def _unbake_expressions(self, shot_data):
+        """Restore expressions from baked static values."""
+        try:
+            import nuke
+
+            # Confirm action
+            reply = QtWidgets.QMessageBox.question(
+                self,
+                "Unbake Expressions",
+                "This will restore original expressions from baked values.\n\n"
+                "Are you sure you want to continue?",
+                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
+            )
+
+            if reply != QtWidgets.QMessageBox.Yes:
+                return
+
+            self.logger.info("Unbaking expressions...")
+
+            unbaked_count = 0
+
+            # Unbake Read nodes
+            for node in nuke.allNodes('Read'):
+                try:
+                    # Restore file expression
+                    if node.knob('multishot_original_file'):
+                        original_expr = node['multishot_original_file'].value()
+                        if original_expr:
+                            node['file'].fromScript(original_expr)
+                            node.removeKnob(node['multishot_original_file'])
+                            self.logger.debug(f"Unbaked Read file: {node.name()}")
+
+                    # Restore first frame expression
+                    if node.knob('multishot_original_first'):
+                        original_expr = node['multishot_original_first'].value()
+                        if original_expr:
+                            node['first'].fromScript(original_expr)
+                            node.removeKnob(node['multishot_original_first'])
+                            self.logger.debug(f"Unbaked Read first: {node.name()}")
+
+                    # Restore last frame expression
+                    if node.knob('multishot_original_last'):
+                        original_expr = node['multishot_original_last'].value()
+                        if original_expr:
+                            node['last'].fromScript(original_expr)
+                            node.removeKnob(node['multishot_original_last'])
+                            self.logger.debug(f"Unbaked Read last: {node.name()}")
+
+                    unbaked_count += 1
+
+                except Exception as e:
+                    self.logger.warning(f"Could not unbake Read node {node.name()}: {e}")
+
+            # Unbake Write nodes
+            for node in nuke.allNodes('Write'):
+                try:
+                    if node.knob('multishot_original_file'):
+                        original_expr = node['multishot_original_file'].value()
+                        if original_expr:
+                            node['file'].fromScript(original_expr)
+                            node.removeKnob(node['multishot_original_file'])
+                            self.logger.debug(f"Unbaked Write file: {node.name()}")
+
+                    unbaked_count += 1
+
+                except Exception as e:
+                    self.logger.warning(f"Could not unbake Write node {node.name()}: {e}")
+
+            self.logger.info(f"Unbaked {unbaked_count} nodes")
+
+            QtWidgets.QMessageBox.information(
+                self,
+                "Unbake Complete",
+                f"Successfully restored expressions in {unbaked_count} nodes."
+            )
+
+        except Exception as e:
+            self.logger.error(f"Error unbaking expressions: {e}")
+            import traceback
+            traceback.print_exc()
+            QtWidgets.QMessageBox.critical(
+                self,
+                "Error",
+                f"Failed to unbake expressions:\n{e}"
             )
 
     def _submit_to_render_farm(self, shot_data):
