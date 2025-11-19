@@ -65,108 +65,76 @@ def _patch_deadline_submission():
     """
     Monkey-patch the Deadline submission to inject environment variables into the job info file.
 
-    This patches the built-in open() function temporarily during SubmitJob execution
-    to intercept job info file writes and add environment variables.
+    This patches the CallDeadlineCommand function to intercept job submission and add
+    environment variables to the job info file before submission.
 
     Reference: https://docs.thinkboxsoftware.com/products/deadline/10.4/1_User%20Manual/manual/environment.html
     """
     try:
         import SubmitNukeToDeadline
-        import builtins
 
-        # Store original SubmitJob function
-        if not hasattr(SubmitNukeToDeadline, '_multishot_original_submit_job'):
-            SubmitNukeToDeadline._multishot_original_submit_job = SubmitNukeToDeadline.SubmitJob
+        # Store original CallDeadlineCommand function
+        if not hasattr(SubmitNukeToDeadline, '_multishot_original_call_deadline_command'):
+            SubmitNukeToDeadline._multishot_original_call_deadline_command = SubmitNukeToDeadline.CallDeadlineCommand
 
-        # Store original open function
-        original_open = builtins.open
+        def patched_call_deadline_command(args, hide_window=True, read_stdout=True):
+            """
+            Patched CallDeadlineCommand that adds environment variables to job info files.
 
-        def patched_submit_job(*args, **kwargs):
-            """Patched SubmitJob that intercepts file writes to add environment variables."""
+            This intercepts the deadlinecommand call and modifies the job info file
+            to include required environment variables.
+            """
+            # Check if this is a job submission command
+            # Format: deadlinecommand <job_info_file> <plugin_info_file> [aux_files...]
+            if args and len(args) >= 2:
+                job_info_file = args[0]
 
-            # Track if we've added env vars
-            env_vars_added = [False]  # Use list to allow modification in nested function
+                # Check if this is a job info file (not a query command)
+                if isinstance(job_info_file, str) and job_info_file.endswith('.job') and os.path.exists(job_info_file):
+                    print("\n" + "=" * 70)
+                    print("MULTISHOT: Modifying Deadline job info file")
+                    print("=" * 70)
+                    print("Job info file: {}".format(job_info_file))
 
-            # Get environment variables to add
-            env_vars = get_environment_variables()
+                    try:
+                        # Read existing job info
+                        with open(job_info_file, 'r') as f:
+                            job_info_content = f.read()
 
-            class FileHandleWrapper:
-                """Wrapper for file handle that intercepts writes to job info files."""
-                def __init__(self, file_handle, is_job_info):
-                    self._handle = file_handle
-                    self._is_job_info = is_job_info
-                    self._closed = False
+                        # Get environment variables to add
+                        env_vars = get_environment_variables()
 
-                def write(self, data):
-                    return self._handle.write(data)
-
-                def close(self):
-                    # Before closing job info file, add environment variables
-                    if self._is_job_info and not self._closed and not env_vars_added[0]:
-                        print("\n" + "=" * 70)
-                        print("MULTISHOT: Adding environment variables to Deadline job info")
-                        print("=" * 70)
-
-                        # Write environment variables
-                        # Format: EnvironmentKeyValue0=KEY=VALUE
+                        # Append environment variables to job info
+                        env_lines = []
                         env_index = 0
                         for key, value in env_vars.items():
-                            env_line = "EnvironmentKeyValue{}={}={}\n".format(env_index, key, value)
-                            self._handle.write(env_line)
-                            print("  Added: {} = {}".format(key, value))
+                            env_line = "EnvironmentKeyValue{}={}={}".format(env_index, key, value)
+                            env_lines.append(env_line)
+                            print("  Adding: {} = {}".format(key, value))
                             env_index += 1
 
-                        # Ensure job environment is merged with worker environment
-                        # UseJobEnvironmentOnly=false means merge (default behavior)
-                        self._handle.write("UseJobEnvironmentOnly=false\n")
+                        # Add UseJobEnvironmentOnly=false to merge with worker environment
+                        env_lines.append("UseJobEnvironmentOnly=false")
                         print("  Set: UseJobEnvironmentOnly = false (merge with worker env)")
 
+                        # Write back to file
+                        with open(job_info_file, 'a') as f:
+                            f.write('\n')
+                            f.write('\n'.join(env_lines))
+                            f.write('\n')
+
                         print("=" * 70 + "\n")
-                        env_vars_added[0] = True
 
-                        # Debug: Try to read back the file to verify
-                        try:
-                            file_path = self._handle.name
-                            print("DEBUG: Job info file path: {}".format(file_path))
-                        except:
-                            pass
+                    except Exception as e:
+                        print("ERROR: Could not modify job info file: {}".format(e))
+                        import traceback
+                        traceback.print_exc()
 
-                    self._closed = True
-                    return self._handle.close()
-
-                def __enter__(self):
-                    return self
-
-                def __exit__(self, *args):
-                    self.close()
-
-                def __getattr__(self, name):
-                    return getattr(self._handle, name)
-
-            def patched_open(file, mode='r', *args, **kwargs):
-                """Patched open that wraps job info file handles."""
-                handle = original_open(file, mode, *args, **kwargs)
-
-                # Check if this is a job info file being written
-                # Pattern: nuke_submit_info%d.job (NOT nuke_plugin_info%d.job)
-                if mode in ('w', 'w+', 'wb', 'wb+') and isinstance(file, str) and 'nuke_submit_info' in file and file.endswith('.job'):
-                    print("MULTISHOT: Intercepting job info file: {}".format(file))
-                    return FileHandleWrapper(handle, is_job_info=True)
-
-                return handle
-
-            # Temporarily replace open function
-            builtins.open = patched_open
-
-            try:
-                # Call original SubmitJob with all arguments
-                return SubmitNukeToDeadline._multishot_original_submit_job(*args, **kwargs)
-            finally:
-                # Restore original open function
-                builtins.open = original_open
+            # Call original function
+            return SubmitNukeToDeadline._multishot_original_call_deadline_command(args, hide_window, read_stdout)
 
         # Replace with patched version
-        SubmitNukeToDeadline.SubmitJob = patched_submit_job
+        SubmitNukeToDeadline.CallDeadlineCommand = patched_call_deadline_command
 
         return True
 
