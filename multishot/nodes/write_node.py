@@ -216,10 +216,42 @@ class MultishotWrite:
             self.logger.error(f"Error creating MultishotWrite node: {e}")
             raise
 
+    def _hide_ocio_display_knobs(self):
+        """
+        Hide OCIO display/view knobs to prevent batch mode errors.
+
+        Write nodes automatically get 'display' and 'view' knobs when OCIO is enabled.
+        These are for preview purposes only, but cause validation errors in batch mode
+        when Nuke tries to validate them during script loading.
+
+        Solution: Set them to invisible so they don't get validated.
+        """
+        try:
+            import nuke
+
+            # Hide display knob
+            if self.node.knob('display'):
+                self.node.knob('display').setVisible(False)
+                self.logger.debug("Hidden 'display' knob")
+
+            # Hide view knob
+            if self.node.knob('view'):
+                self.node.knob('view').setVisible(False)
+                self.logger.debug("Hidden 'view' knob")
+
+        except Exception as e:
+            # Don't fail node creation if this doesn't work
+            self.logger.warning(f"Could not hide OCIO display knobs: {e}")
+
     def _add_custom_knobs(self):
         """Add custom knobs to the node."""
         try:
             import nuke
+
+            # Hide OCIO display/view knobs to prevent batch mode errors
+            # These knobs are for preview only and cause "Bad value for display" errors
+            # in batch mode when OCIO validation runs during script loading
+            self._hide_ocio_display_knobs()
 
             # Separator
             sep = nuke.Text_Knob('multishot_sep', 'Multishot Settings')
