@@ -70,50 +70,60 @@ def get_environment_variables():
 
 def _patch_deadline_submission():
     """
-    Monkey-patch the Deadline submission to inject environment variables into the job.
+    Monkey-patch the Deadline submission to inject environment variables into the job info file.
 
-    This patches the SubmitJob function to add environment variables to the job info
-    before submission, so they get passed to the render nodes.
+    This patches the WriteJobInfoFile function to add EnvironmentKeyValue entries
+    to the job info file, which Deadline uses to set environment variables on render nodes.
+
+    Reference: https://docs.thinkboxsoftware.com/products/deadline/10.4/1_User%20Manual/manual/environment.html
     """
     try:
         import SubmitNukeToDeadline
 
-        # Store original SubmitJob function
-        if not hasattr(SubmitNukeToDeadline, '_multishot_original_submit_job'):
-            SubmitNukeToDeadline._multishot_original_submit_job = SubmitNukeToDeadline.SubmitJob
+        # Store original WriteJobInfoFile function
+        if not hasattr(SubmitNukeToDeadline, '_multishot_original_write_job_info'):
+            SubmitNukeToDeadline._multishot_original_write_job_info = SubmitNukeToDeadline.WriteJobInfoFile
 
-        def patched_submit_job(dialog, root):
-            """Patched SubmitJob that adds environment variables to job info."""
+        def patched_write_job_info_file(fileHandle, dialog, root):
+            """Patched WriteJobInfoFile that adds environment variables."""
+            # Call original function first
+            SubmitNukeToDeadline._multishot_original_write_job_info(fileHandle, dialog, root)
+
             # Get environment variables to add
             env_vars = get_environment_variables()
 
             print("\n" + "=" * 70)
-            print("MULTISHOT: Adding environment variables to Deadline job")
+            print("MULTISHOT: Adding environment variables to Deadline job info")
             print("=" * 70)
 
-            # Add environment variables to the dialog's environment list
-            # The dialog has an environmentList that stores env vars for the job
-            if hasattr(dialog, 'environmentList'):
-                for key, value in env_vars.items():
-                    # Add to environment list
-                    env_entry = "{}={}".format(key, value)
-                    if env_entry not in dialog.environmentList:
-                        dialog.environmentList.append(env_entry)
-                        print("  Added: {} = {}".format(key, value))
-                    else:
-                        print("  Already exists: {} = {}".format(key, value))
-            else:
-                print("  Warning: Dialog has no environmentList attribute")
-                for key, value in env_vars.items():
-                    print("  Would add: {} = {}".format(key, value))
+            # Write environment variables to job info file
+            # Format: EnvironmentKeyValue0=KEY=VALUE
+            env_index = 0
+            for key, value in env_vars.items():
+                env_line = "EnvironmentKeyValue{}={}={}\n".format(env_index, key, value)
+
+                # Check if we need UTF-16 encoding (for non-ASCII characters)
+                try:
+                    # Try to write as regular string
+                    fileHandle.write(env_line)
+                    print("  Added: {} = {}".format(key, value))
+                except:
+                    # Fall back to UTF-16 encoding if available
+                    try:
+                        if hasattr(SubmitNukeToDeadline, 'EncodeAsUTF16String'):
+                            fileHandle.write(SubmitNukeToDeadline.EncodeAsUTF16String(env_line))
+                            print("  Added (UTF-16): {} = {}".format(key, value))
+                        else:
+                            print("  Warning: Could not write env var: {} = {}".format(key, value))
+                    except:
+                        print("  Warning: Could not write env var: {} = {}".format(key, value))
+
+                env_index += 1
 
             print("=" * 70 + "\n")
 
-            # Call original SubmitJob
-            return SubmitNukeToDeadline._multishot_original_submit_job(dialog, root)
-
         # Replace with patched version
-        SubmitNukeToDeadline.SubmitJob = patched_submit_job
+        SubmitNukeToDeadline.WriteJobInfoFile = patched_write_job_info_file
 
         return True
 
