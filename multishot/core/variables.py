@@ -106,33 +106,54 @@ class VariableManager:
             # This callback runs automatically when the script is loaded, even without NUKE_PATH
             callback_code = '''import json
 try:
+    print("Multishot onScriptLoad: Starting...")
+
     # Ensure individual knobs exist for context variables
     if nuke.root().knob('multishot_context'):
         context_json = nuke.root()['multishot_context'].value()
+        print("Multishot onScriptLoad: context_json = " + repr(context_json))
         if context_json:
-            context_vars = json.loads(context_json)
-            for key, value in context_vars.items():
-                if key not in nuke.root().knobs():
-                    knob = nuke.String_Knob(key, key)
-                    knob.setFlag(nuke.INVISIBLE)
-                    nuke.root().addKnob(knob)
-                nuke.root()[key].setValue(str(value))
-
-    # Ensure individual knobs exist for custom variables (PROJ_ROOT, IMG_ROOT)
-    if nuke.root().knob('multishot_custom'):
-        custom_json = nuke.root()['multishot_custom'].value()
-        if custom_json:
-            custom_vars = json.loads(custom_json)
-            for key, value in custom_vars.items():
-                if key in ['PROJ_ROOT', 'IMG_ROOT']:
+            try:
+                context_vars = json.loads(context_json)
+                print("Multishot onScriptLoad: Parsed context_vars = " + str(context_vars))
+                for key, value in context_vars.items():
                     if key not in nuke.root().knobs():
                         knob = nuke.String_Knob(key, key)
                         knob.setFlag(nuke.INVISIBLE)
                         nuke.root().addKnob(knob)
                     nuke.root()[key].setValue(str(value))
+                    print("Multishot onScriptLoad: Set " + key + " = " + str(value))
+            except Exception as e:
+                print("Multishot onScriptLoad: ERROR parsing context JSON: " + str(e))
+    else:
+        print("Multishot onScriptLoad: multishot_context knob NOT FOUND!")
+
+    # Ensure individual knobs exist for custom variables (PROJ_ROOT, IMG_ROOT)
+    if nuke.root().knob('multishot_custom'):
+        custom_json = nuke.root()['multishot_custom'].value()
+        print("Multishot onScriptLoad: custom_json = " + repr(custom_json))
+        if custom_json:
+            try:
+                custom_vars = json.loads(custom_json)
+                print("Multishot onScriptLoad: Parsed custom_vars = " + str(custom_vars))
+                for key, value in custom_vars.items():
+                    if key in ['PROJ_ROOT', 'IMG_ROOT']:
+                        if key not in nuke.root().knobs():
+                            knob = nuke.String_Knob(key, key)
+                            knob.setFlag(nuke.INVISIBLE)
+                            nuke.root().addKnob(knob)
+                        nuke.root()[key].setValue(str(value))
+                        print("Multishot onScriptLoad: Set " + key + " = " + str(value))
+            except Exception as e:
+                print("Multishot onScriptLoad: ERROR parsing custom JSON: " + str(e))
+    else:
+        print("Multishot onScriptLoad: multishot_custom knob NOT FOUND!")
+
     print("Multishot: Variables initialized from onScriptLoad callback")
 except Exception as e:
     print("Multishot: Error in onScriptLoad callback: " + str(e))
+    import traceback
+    traceback.print_exc()
 '''
             root['onScriptLoad'].setValue(callback_code)
             self.logger.debug("Set onScriptLoad callback for batch mode variable initialization")
