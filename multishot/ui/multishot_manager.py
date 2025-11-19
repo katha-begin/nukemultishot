@@ -1081,6 +1081,7 @@ class MultishotManagerDialog(BaseWidget):
         try:
             import nuke
             import os
+            import re
 
             # Get PROJ_ROOT
             proj_root = self.variable_manager.get_variable('PROJ_ROOT')
@@ -1123,15 +1124,37 @@ class MultishotManagerDialog(BaseWidget):
                     )
                     return
 
-            # Get current script name or generate default
-            current_script = nuke.root().name()
-            if current_script == 'Root' or not current_script:
-                # Generate default filename
-                # Format: {ep}_{seq}_{shot}_comp_v001.nk
-                filename = f"{shot_data['ep']}_{shot_data['seq']}_{shot_data['shot']}_comp_v001.nk"
+            # Build shot name for filename
+            # Format: {ep}_{seq}_{shot}
+            shot_name = f"{shot_data['ep']}_{shot_data['seq']}_{shot_data['shot']}"
+
+            # Scan for existing versions in the directory
+            # Look for files matching: {shotName}_v###.nk
+            existing_versions = []
+            pattern = re.compile(rf"^{re.escape(shot_name)}_v(\d{{3}})\.nk$")
+
+            try:
+                for filename in os.listdir(shot_dir):
+                    match = pattern.match(filename)
+                    if match:
+                        version_num = int(match.group(1))
+                        existing_versions.append(version_num)
+            except Exception as e:
+                self.logger.warning(f"Could not scan directory for versions: {e}")
+
+            # Determine next version number
+            if existing_versions:
+                next_version_num = max(existing_versions) + 1
+                self.logger.info(f"Found existing versions: {existing_versions}, next version: {next_version_num}")
             else:
-                # Use current script name
-                filename = os.path.basename(current_script)
+                next_version_num = 1
+                self.logger.info("No existing versions found, starting with v001")
+
+            # Format version as v001, v002, etc.
+            next_version = f"v{next_version_num:03d}"
+
+            # Build filename: {shotName}_{next_version}.nk
+            filename = f"{shot_name}_{next_version}.nk"
 
             # Build full save path
             save_path = os.path.join(shot_dir, filename)
