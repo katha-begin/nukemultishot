@@ -34,10 +34,95 @@ def ensure_variables_for_batch_mode():
 
         print("Multishot: Variables initialized for batch mode")
 
+        # Fix OCIO display settings for batch mode
+        fix_ocio_display_for_batch_mode()
+
     except Exception as e:
         print("Multishot: Error initializing variables in batch mode: {}".format(e))
         import traceback
         traceback.print_exc()
+
+def fix_ocio_display_for_batch_mode():
+    """
+    Fix OCIO display/colorspace settings for batch mode rendering.
+
+    Common issues:
+    1. Display device names (e.g., "sRGB - Display") used as colorspaces in Read/Write nodes
+    2. Invalid viewer settings in batch mode
+
+    This function fixes these issues by:
+    - Replacing display device names with proper colorspaces
+    - Setting safe defaults for viewer nodes
+    """
+    try:
+        import nuke
+
+        # Get OCIO config
+        ocio_config_path = nuke.root().knob('customOCIOConfigPath')
+        if not ocio_config_path or not ocio_config_path.value():
+            print("Multishot: No custom OCIO config set, skipping OCIO fix")
+            return
+
+        print("Multishot: Fixing OCIO settings for batch mode...")
+        print("  OCIO config: {}".format(ocio_config_path.value()))
+
+        # Map of display device names to proper colorspaces
+        display_to_colorspace_map = {
+            'sRGB - Display': 'sRGB - Texture',
+            'Rec.1886 Rec.709 - Display': 'Rec.709 - Display',
+            'Rec.1886 Rec.2020 - Display': 'Rec.2020 - Display',
+        }
+
+        fixed_count = 0
+
+        # Fix Read nodes
+        for node in nuke.allNodes('Read'):
+            try:
+                if node.knob('colorspace'):
+                    current_cs = node.knob('colorspace').value()
+                    if current_cs in display_to_colorspace_map:
+                        new_cs = display_to_colorspace_map[current_cs]
+                        node.knob('colorspace').setValue(new_cs)
+                        print("  Read '{}': changed colorspace '{}' -> '{}'".format(
+                            node.name(), current_cs, new_cs))
+                        fixed_count += 1
+            except Exception as e:
+                print("  Warning: Could not fix Read node '{}': {}".format(node.name(), e))
+
+        # Fix Write nodes
+        for node in nuke.allNodes('Write'):
+            try:
+                if node.knob('colorspace'):
+                    current_cs = node.knob('colorspace').value()
+                    if current_cs in display_to_colorspace_map:
+                        new_cs = display_to_colorspace_map[current_cs]
+                        node.knob('colorspace').setValue(new_cs)
+                        print("  Write '{}': changed colorspace '{}' -> '{}'".format(
+                            node.name(), current_cs, new_cs))
+                        fixed_count += 1
+            except Exception as e:
+                print("  Warning: Could not fix Write node '{}': {}".format(node.name(), e))
+
+        # Fix Viewer nodes (set to default/none in batch mode)
+        for node in nuke.allNodes('Viewer'):
+            try:
+                # In batch mode, viewers don't need specific display settings
+                # Set to 'None' or 'default' to avoid errors
+                if node.knob('viewerProcess'):
+                    node.knob('viewerProcess').setValue('None')
+                    print("  Viewer '{}': set viewerProcess to 'None'".format(node.name()))
+                    fixed_count += 1
+            except Exception as e:
+                print("  Warning: Could not fix Viewer '{}': {}".format(node.name(), e))
+
+        if fixed_count > 0:
+            print("Multishot: Fixed {} OCIO settings for batch mode".format(fixed_count))
+        else:
+            print("Multishot: No OCIO settings needed fixing")
+
+    except Exception as e:
+        print("Multishot: Warning - Could not fix OCIO settings: {}".format(e))
+        # Don't raise - this is not critical
 
 def initialize_multishot():
     """Initialize the Multishot Workflow System."""
