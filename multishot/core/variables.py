@@ -88,22 +88,27 @@ class VariableManager:
             import nuke
             root = nuke.root()
 
+            # DON'T create knobs with +INVISIBLE flag in User tab - Deadline strips them!
+            # Instead, store them as built-in root knobs without any tab
+            # We'll use the onScriptLoad callback to recreate individual knobs from JSON
+
             # Create variables knob if it doesn't exist
             if self.VARIABLES_KNOB not in root.knobs():
                 knob = nuke.String_Knob(self.VARIABLES_KNOB, 'Multishot Variables')
-                knob.setFlag(nuke.INVISIBLE)  # Hide from UI
+                # DON'T set INVISIBLE flag - Deadline strips invisible knobs!
                 root.addKnob(knob)
                 self.logger.debug(f"Created {self.VARIABLES_KNOB} knob")
 
             # Create context knob if it doesn't exist
             if self.CONTEXT_KNOB not in root.knobs():
                 knob = nuke.String_Knob(self.CONTEXT_KNOB, 'Multishot Context')
-                knob.setFlag(nuke.INVISIBLE)  # Hide from UI
+                # DON'T set INVISIBLE flag - Deadline strips invisible knobs!
                 root.addKnob(knob)
                 self.logger.debug(f"Created {self.CONTEXT_KNOB} knob")
 
             # Set onScriptLoad callback to ensure variables are accessible in batch mode
             # This callback runs automatically when the script is loaded, even without NUKE_PATH
+            # DON'T use +INVISIBLE flag - Deadline strips invisible knobs!
             callback_code = '''import json
 try:
     print("Multishot onScriptLoad: Starting...")
@@ -119,7 +124,7 @@ try:
                 for key, value in context_vars.items():
                     if key not in nuke.root().knobs():
                         knob = nuke.String_Knob(key, key)
-                        knob.setFlag(nuke.INVISIBLE)
+                        # DON'T set INVISIBLE - Deadline strips invisible knobs!
                         nuke.root().addKnob(knob)
                     nuke.root()[key].setValue(str(value))
                     print("Multishot onScriptLoad: Set " + key + " = " + str(value))
@@ -140,7 +145,7 @@ try:
                     if key in ['PROJ_ROOT', 'IMG_ROOT']:
                         if key not in nuke.root().knobs():
                             knob = nuke.String_Knob(key, key)
-                            knob.setFlag(nuke.INVISIBLE)
+                            # DON'T set INVISIBLE - Deadline strips invisible knobs!
                             nuke.root().addKnob(knob)
                         nuke.root()[key].setValue(str(value))
                         print("Multishot onScriptLoad: Set " + key + " = " + str(value))
@@ -235,7 +240,7 @@ except Exception as e:
                 if key not in root.knobs():
                     # Create string knob for the variable
                     knob = nuke.String_Knob(key, key)
-                    knob.setFlag(nuke.INVISIBLE)  # Hide from UI
+                    # DON'T set INVISIBLE - Deadline strips invisible knobs!
                     root.addKnob(knob)
                     # Set initial value - keep Windows paths, let Deadline do the mapping
                     root[key].setValue(value)
@@ -284,7 +289,7 @@ except Exception as e:
                 if key not in root.knobs():
                     # Create string knob for the variable
                     knob = nuke.String_Knob(key, key)
-                    knob.setFlag(nuke.INVISIBLE)  # Hide from UI
+                    # DON'T set INVISIBLE - Deadline strips invisible knobs!
                     root.addKnob(knob)
                     self.logger.debug(f"Created individual context knob: {key}")
 

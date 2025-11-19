@@ -63,7 +63,7 @@ def ensure_variables_for_batch_mode():
                     for key, value in context_vars.items():
                         if key not in root.knobs():
                             knob = nuke.String_Knob(key, key)
-                            knob.setFlag(nuke.INVISIBLE)
+                            # DON'T set INVISIBLE - Deadline strips invisible knobs!
                             root.addKnob(knob)
                             print("  Created knob: {}".format(key))
                         root[key].setValue(str(value))
@@ -89,7 +89,7 @@ def ensure_variables_for_batch_mode():
                         if key in ['PROJ_ROOT', 'IMG_ROOT']:
                             if key not in root.knobs():
                                 knob = nuke.String_Knob(key, key)
-                                knob.setFlag(nuke.INVISIBLE)
+                                # DON'T set INVISIBLE - Deadline strips invisible knobs!
                                 root.addKnob(knob)
                                 print("  Created knob: {}".format(key))
                             root[key].setValue(str(value))
