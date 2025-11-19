@@ -150,6 +150,18 @@ def ensure_variables_before_submission():
                 value = root[key].value()
                 print("    {} = {}".format(key, value))
 
+        # DEBUG: Print JSON knob values to verify they're embedded
+        print("\n  JSON knobs (will be saved to .nk file):")
+        for knob_name in ['multishot_context', 'multishot_custom']:
+            if root.knob(knob_name):
+                value = root[knob_name].value()
+                if value:
+                    print("    {} = {}".format(knob_name, value))
+                else:
+                    print("    {} = EMPTY!".format(knob_name))
+            else:
+                print("    {} = MISSING!".format(knob_name))
+
         print("=" * 70 + "\n")
         return True
 
