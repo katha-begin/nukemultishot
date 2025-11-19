@@ -9,11 +9,86 @@ This ensures:
 - OCIO config path is included
 - Individual knobs (ep, seq, shot, PROJ_ROOT, IMG_ROOT) are created
 - TCL expressions evaluate correctly
+- Viewer nodes are fixed for batch mode compatibility
 """
 
 import os
 import sys
 import platform
+import re
+
+
+def fix_viewer_processes_for_batch_mode():
+    """
+    Fix Viewer nodes in the current script to be compatible with batch mode.
+
+    This fixes viewerProcess settings that cause errors in batch mode:
+    - "ACES 1.0 - SDR Video (sRGB - Display)" -> "None"
+    - Any viewerProcess with display names -> "None"
+
+    This must be called BEFORE submitting to Deadline, so the script is already
+    fixed when it's loaded on render nodes.
+    """
+    try:
+        import nuke
+
+        print("\n" + "=" * 70)
+        print("MULTISHOT: Fixing Viewer nodes for batch mode")
+        print("=" * 70)
+
+        fixed_count = 0
+
+        # Fix all Viewer nodes
+        for node in nuke.allNodes('Viewer'):
+            try:
+                if node.knob('viewerProcess'):
+                    current_vp = node.knob('viewerProcess').value()
+
+                    # Check if viewerProcess has invalid values for batch mode
+                    if current_vp and current_vp != 'None':
+                        # Get available values
+                        vp_knob = node.knob('viewerProcess')
+                        if hasattr(vp_knob, 'values'):
+                            available_values = vp_knob.values()
+
+                            # Try to set to 'None'
+                            if 'None' in available_values:
+                                vp_knob.setValue('None')
+                                print("  Viewer '{}': viewerProcess '{}' -> 'None'".format(node.name(), current_vp))
+                                fixed_count += 1
+                            elif 'none' in available_values:
+                                vp_knob.setValue('none')
+                                print("  Viewer '{}': viewerProcess '{}' -> 'none'".format(node.name(), current_vp))
+                                fixed_count += 1
+                            elif len(available_values) > 0:
+                                # Use first available value
+                                vp_knob.setValue(available_values[0])
+                                print("  Viewer '{}': viewerProcess '{}' -> '{}'".format(node.name(), current_vp, available_values[0]))
+                                fixed_count += 1
+                        else:
+                            # Try setting to empty string
+                            vp_knob.setValue('')
+                            print("  Viewer '{}': viewerProcess '{}' -> '' (empty)".format(node.name(), current_vp))
+                            fixed_count += 1
+
+            except Exception as e:
+                print("  Warning: Could not fix Viewer '{}': {}".format(node.name(), e))
+
+        if fixed_count > 0:
+            print("Fixed {} Viewer node(s)".format(fixed_count))
+            print("=" * 70 + "\n")
+            return True
+        else:
+            print("No Viewer nodes needed fixing")
+            print("=" * 70 + "\n")
+            return False
+
+    except Exception as e:
+        print("ERROR: Could not fix Viewer nodes: {}".format(e))
+        import traceback
+        traceback.print_exc()
+        print("=" * 70 + "\n")
+        return False
 
 
 def get_environment_variables():
@@ -217,6 +292,10 @@ def submit_to_deadline():
             print("Importing SubmitNukeToDeadline...")
             import SubmitNukeToDeadline
             print("Successfully imported SubmitNukeToDeadline")
+
+            # Fix Viewer nodes for batch mode compatibility
+            # This must be done BEFORE submission so the script is already fixed
+            fix_viewer_processes_for_batch_mode()
 
             # Patch the submission to add our environment variables
             _patch_deadline_submission()
