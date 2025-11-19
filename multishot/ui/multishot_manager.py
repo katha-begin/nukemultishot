@@ -857,13 +857,24 @@ class MultishotManagerDialog(BaseWidget):
 
             baked_count = 0
 
+            # Helper function to check if a knob has TCL or Python expressions
+            def has_expression(knob):
+                """Check if knob has TCL [value ...] or Python {{...}} expressions."""
+                if knob.hasExpression():
+                    return True
+                # Check for TCL expressions
+                value_str = knob.toScript()
+                if '[' in value_str and ']' in value_str:
+                    return True
+                return False
+
             # Bake Read nodes
             for node in nuke.allNodes('Read'):
                 try:
                     # Store original expressions in user knobs for unbaking
                     if node.knob('file'):
-                        # Check if it has an expression
-                        if node['file'].hasExpression():
+                        # Check if it has an expression (TCL or Python)
+                        if has_expression(node['file']):
                             original_expr = node['file'].toScript()
                             # Store original expression
                             if not node.knob('multishot_original_file'):
@@ -875,10 +886,10 @@ class MultishotManagerDialog(BaseWidget):
                             # Bake to static value
                             evaluated_path = node['file'].evaluate()
                             node['file'].setValue(evaluated_path)
-                            self.logger.debug(f"Baked Read file: {node.name()}")
+                            self.logger.info(f"Baked Read file: {node.name()} -> {evaluated_path}")
 
                     # Bake frame range
-                    if node.knob('first') and node['first'].hasExpression():
+                    if node.knob('first') and has_expression(node['first']):
                         original_expr = node['first'].toScript()
                         if not node.knob('multishot_original_first'):
                             knob = nuke.String_Knob('multishot_original_first', 'Original First Expression')
@@ -888,9 +899,9 @@ class MultishotManagerDialog(BaseWidget):
 
                         first_frame = int(node['first'].value())
                         node['first'].setValue(first_frame)
-                        self.logger.debug(f"Baked Read first: {node.name()}")
+                        self.logger.info(f"Baked Read first: {node.name()} -> {first_frame}")
 
-                    if node.knob('last') and node['last'].hasExpression():
+                    if node.knob('last') and has_expression(node['last']):
                         original_expr = node['last'].toScript()
                         if not node.knob('multishot_original_last'):
                             knob = nuke.String_Knob('multishot_original_last', 'Original Last Expression')
@@ -900,7 +911,7 @@ class MultishotManagerDialog(BaseWidget):
 
                         last_frame = int(node['last'].value())
                         node['last'].setValue(last_frame)
-                        self.logger.debug(f"Baked Read last: {node.name()}")
+                        self.logger.info(f"Baked Read last: {node.name()} -> {last_frame}")
 
                     baked_count += 1
 
@@ -911,7 +922,7 @@ class MultishotManagerDialog(BaseWidget):
             for node in nuke.allNodes('Write'):
                 try:
                     if node.knob('file'):
-                        if node['file'].hasExpression():
+                        if has_expression(node['file']):
                             original_expr = node['file'].toScript()
                             # Store original expression
                             if not node.knob('multishot_original_file'):
@@ -923,7 +934,7 @@ class MultishotManagerDialog(BaseWidget):
                             # Bake to static value
                             evaluated_path = node['file'].evaluate()
                             node['file'].setValue(evaluated_path)
-                            self.logger.debug(f"Baked Write file: {node.name()}")
+                            self.logger.info(f"Baked Write file: {node.name()} -> {evaluated_path}")
 
                     baked_count += 1
 
