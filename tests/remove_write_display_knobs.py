@@ -22,24 +22,26 @@ Python 2 (Nuke 13-15):
 
 def remove_write_display_knobs():
     """
-    Remove display and view knobs from all Write nodes.
+    Fix display and view knobs in all Write nodes.
 
     These knobs are part of Nuke 16's "Output Transform" feature.
     They cause OCIO validation errors in batch mode because they
     reference display devices that OCIO tries to validate during script loading.
 
+    Since these are built-in knobs that can't be removed, we set them to safe values.
+
     Returns:
-        int: Number of knobs removed
+        int: Number of knobs fixed
     """
     try:
         import nuke
 
         print("=" * 70)
-        print("REMOVING DISPLAY/VIEW KNOBS FROM WRITE NODES")
+        print("FIXING DISPLAY/VIEW KNOBS IN WRITE NODES")
         print("(Output Transform feature - Nuke 16+)")
         print("=" * 70)
 
-        removed_count = 0
+        fixed_count = 0
 
         # Process all Write nodes
         write_nodes = nuke.allNodes('Write')
@@ -53,63 +55,77 @@ def remove_write_display_knobs():
 
         for node in write_nodes:
             node_name = node.name()
-            node_removed = 0
+            node_fixed = 0
+
+            print("\n  {}:".format(node_name))
+
+            # List all knobs to see what's available
+            print("    Available knobs: {}".format([k for k in node.knobs().keys() if 'display' in k.lower() or 'view' in k.lower() or 'ocio' in k.lower()]))
 
             # Check if node has output transform enabled
             if node.knob('useOCIODisplayView'):
                 use_output_transform = node.knob('useOCIODisplayView').value()
+                print("    useOCIODisplayView: {}".format(use_output_transform))
                 if use_output_transform:
-                    print("  {}: Output Transform is ENABLED".format(node_name))
                     # Disable output transform
                     try:
                         node.knob('useOCIODisplayView').setValue(False)
                         print("    -> Disabled Output Transform")
-                        removed_count += 1
+                        node_fixed += 1
+                        fixed_count += 1
                     except Exception as e:
                         print("    -> Could not disable: {}".format(e))
 
-            # Remove 'display' knob
+            # Try to set display to empty or safe value
             if node.knob('display'):
-                try:
-                    node.removeKnob(node.knob('display'))
-                    print("  {}: Removed 'display' knob".format(node_name))
-                    node_removed += 1
-                    removed_count += 1
-                except Exception as e:
-                    print("  {}: Could not remove 'display' knob: {}".format(node_name, e))
+                current_value = node.knob('display').value()
+                print("    display: '{}'".format(current_value))
+                if current_value and 'Display' in current_value:
+                    try:
+                        # Try setting to empty string
+                        node.knob('display').setValue('')
+                        print("    -> Set display to '' (empty)")
+                        node_fixed += 1
+                        fixed_count += 1
+                    except Exception as e:
+                        print("    -> Could not set display: {}".format(e))
 
-            # Remove 'view' knob
+            # Try to set view to empty or safe value
             if node.knob('view'):
-                try:
-                    node.removeKnob(node.knob('view'))
-                    print("  {}: Removed 'view' knob".format(node_name))
-                    node_removed += 1
-                    removed_count += 1
-                except Exception as e:
-                    print("  {}: Could not remove 'view' knob: {}".format(node_name, e))
+                current_value = node.knob('view').value()
+                print("    view: '{}'".format(current_value))
+                if current_value:
+                    try:
+                        # Try setting to empty string
+                        node.knob('view').setValue('')
+                        print("    -> Set view to '' (empty)")
+                        node_fixed += 1
+                        fixed_count += 1
+                    except Exception as e:
+                        print("    -> Could not set view: {}".format(e))
 
-            if node_removed == 0 and not (node.knob('useOCIODisplayView') and node.knob('useOCIODisplayView').value()):
-                print("  {}: No display/view knobs found".format(node_name))
+            if node_fixed == 0:
+                print("    -> No changes needed".format(node_name))
         
         print("\n" + "=" * 70)
-        if removed_count > 0:
-            print("SUCCESS: Removed/disabled {} item(s)".format(removed_count))
+        if fixed_count > 0:
+            print("SUCCESS: Fixed {} item(s)".format(fixed_count))
             print("\nIMPORTANT: SAVE YOUR SCRIPT NOW!")
             print("  nuke.scriptSave()")
             print("\nWhat this does:")
             print("  - Disables Output Transform feature (Nuke 16+)")
-            print("  - Removes preview-only display/view knobs from Write nodes")
+            print("  - Sets display/view knobs to empty values")
             print("  - Prevents OCIO validation errors in batch mode")
             print("  - Does NOT affect colorspace settings")
             print("  - Your OCIO config will still be used")
         else:
-            print("No display/view knobs found to remove")
+            print("No display/view knobs found to fix")
         print("=" * 70)
         
-        return removed_count
-        
+        return fixed_count
+
     except Exception as e:
-        print(f"\nERROR: {e}")
+        print("\nERROR: {}".format(e))
         import traceback
         traceback.print_exc()
         return 0
