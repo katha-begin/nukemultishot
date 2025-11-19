@@ -72,58 +72,93 @@ def _patch_deadline_submission():
     """
     Monkey-patch the Deadline submission to inject environment variables into the job info file.
 
-    This patches the WriteJobInfoFile function to add EnvironmentKeyValue entries
-    to the job info file, which Deadline uses to set environment variables on render nodes.
+    This patches the built-in open() function temporarily during SubmitJob execution
+    to intercept job info file writes and add environment variables.
 
     Reference: https://docs.thinkboxsoftware.com/products/deadline/10.4/1_User%20Manual/manual/environment.html
     """
     try:
         import SubmitNukeToDeadline
+        import builtins
 
-        # Store original WriteJobInfoFile function
-        if not hasattr(SubmitNukeToDeadline, '_multishot_original_write_job_info'):
-            SubmitNukeToDeadline._multishot_original_write_job_info = SubmitNukeToDeadline.WriteJobInfoFile
+        # Store original SubmitJob function
+        if not hasattr(SubmitNukeToDeadline, '_multishot_original_submit_job'):
+            SubmitNukeToDeadline._multishot_original_submit_job = SubmitNukeToDeadline.SubmitJob
 
-        def patched_write_job_info_file(fileHandle, dialog, root):
-            """Patched WriteJobInfoFile that adds environment variables."""
-            # Call original function first
-            SubmitNukeToDeadline._multishot_original_write_job_info(fileHandle, dialog, root)
+        # Store original open function
+        original_open = builtins.open
+
+        def patched_submit_job(dialog, root):
+            """Patched SubmitJob that intercepts file writes to add environment variables."""
+
+            # Track if we've added env vars
+            env_vars_added = [False]  # Use list to allow modification in nested function
 
             # Get environment variables to add
             env_vars = get_environment_variables()
 
-            print("\n" + "=" * 70)
-            print("MULTISHOT: Adding environment variables to Deadline job info")
-            print("=" * 70)
+            class FileHandleWrapper:
+                """Wrapper for file handle that intercepts writes to job info files."""
+                def __init__(self, file_handle, is_job_info):
+                    self._handle = file_handle
+                    self._is_job_info = is_job_info
+                    self._closed = False
 
-            # Write environment variables to job info file
-            # Format: EnvironmentKeyValue0=KEY=VALUE
-            env_index = 0
-            for key, value in env_vars.items():
-                env_line = "EnvironmentKeyValue{}={}={}\n".format(env_index, key, value)
+                def write(self, data):
+                    return self._handle.write(data)
 
-                # Check if we need UTF-16 encoding (for non-ASCII characters)
-                try:
-                    # Try to write as regular string
-                    fileHandle.write(env_line)
-                    print("  Added: {} = {}".format(key, value))
-                except:
-                    # Fall back to UTF-16 encoding if available
-                    try:
-                        if hasattr(SubmitNukeToDeadline, 'EncodeAsUTF16String'):
-                            fileHandle.write(SubmitNukeToDeadline.EncodeAsUTF16String(env_line))
-                            print("  Added (UTF-16): {} = {}".format(key, value))
-                        else:
-                            print("  Warning: Could not write env var: {} = {}".format(key, value))
-                    except:
-                        print("  Warning: Could not write env var: {} = {}".format(key, value))
+                def close(self):
+                    # Before closing job info file, add environment variables
+                    if self._is_job_info and not self._closed and not env_vars_added[0]:
+                        print("\n" + "=" * 70)
+                        print("MULTISHOT: Adding environment variables to Deadline job info")
+                        print("=" * 70)
 
-                env_index += 1
+                        # Write environment variables
+                        env_index = 0
+                        for key, value in env_vars.items():
+                            env_line = "EnvironmentKeyValue{}={}={}\n".format(env_index, key, value)
+                            self._handle.write(env_line)
+                            print("  Added: {} = {}".format(key, value))
+                            env_index += 1
 
-            print("=" * 70 + "\n")
+                        print("=" * 70 + "\n")
+                        env_vars_added[0] = True
+
+                    self._closed = True
+                    return self._handle.close()
+
+                def __enter__(self):
+                    return self
+
+                def __exit__(self, *args):
+                    self.close()
+
+                def __getattr__(self, name):
+                    return getattr(self._handle, name)
+
+            def patched_open(file, mode='r', *args, **kwargs):
+                """Patched open that wraps job info file handles."""
+                handle = original_open(file, mode, *args, **kwargs)
+
+                # Check if this is a job info file being written
+                if mode in ('w', 'w+', 'wb', 'wb+') and isinstance(file, str) and 'submit_info' in file and file.endswith('.job'):
+                    return FileHandleWrapper(handle, is_job_info=True)
+
+                return handle
+
+            # Temporarily replace open function
+            builtins.open = patched_open
+
+            try:
+                # Call original SubmitJob
+                return SubmitNukeToDeadline._multishot_original_submit_job(dialog, root)
+            finally:
+                # Restore original open function
+                builtins.open = original_open
 
         # Replace with patched version
-        SubmitNukeToDeadline.WriteJobInfoFile = patched_write_job_info_file
+        SubmitNukeToDeadline.SubmitJob = patched_submit_job
 
         return True
 
