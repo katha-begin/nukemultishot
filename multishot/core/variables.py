@@ -200,11 +200,14 @@ except Exception as e:
                     knob = nuke.String_Knob(key, key)
                     knob.setFlag(nuke.INVISIBLE)  # Hide from UI
                     root.addKnob(knob)
-                    self.logger.debug(f"Created individual knob: {key}")
-
-                # Set the value
-                root[key].setValue(value)
-                self.logger.debug(f"Set {key} = {value}")
+                    # Set initial value only when creating the knob
+                    root[key].setValue(value)
+                    self.logger.debug(f"Created individual knob: {key} = {value}")
+                else:
+                    # Knob already exists - DON'T overwrite it!
+                    # In batch mode, Deadline may have already set this to the correct Linux path
+                    existing_value = root[key].value()
+                    self.logger.debug(f"Knob {key} already exists with value: {existing_value} (not overwriting)")
 
         except Exception as e:
             self.logger.error(f"Error creating individual root knobs: {e}")
