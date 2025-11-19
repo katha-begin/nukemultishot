@@ -270,12 +270,13 @@ if hasattr(read_node_module, '_node_instances'):
             # ✅ FIX: Set first/last frame to use root knobs
             # This ensures the Read node uses the correct frame range from the script
             # Without this, the expressions might evaluate incorrectly and get "baked" into the script
+            # Note: first/last are Int_Knob, so we use setExpression() not fromUserText()
             if self.node.knob('first'):
-                self.node['first'].fromUserText('[value root.first_frame]')
+                self.node['first'].setExpression('[value root.first_frame]')
                 self.logger.debug("[BUILD_PATH] Set first frame to [value root.first_frame]")
 
             if self.node.knob('last'):
-                self.node['last'].fromUserText('[value root.last_frame]')
+                self.node['last'].setExpression('[value root.last_frame]')
                 self.logger.debug("[BUILD_PATH] Set last frame to [value root.last_frame]")
 
             # Update status

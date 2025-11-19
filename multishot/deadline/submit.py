@@ -81,12 +81,13 @@ def fix_read_node_frame_ranges_for_submission():
                 node_name = node.name()
 
                 # Reset first/last to use root knobs
+                # Note: first/last are Int_Knob, so we use setExpression() not fromUserText()
                 if node.knob('first'):
-                    node['first'].fromUserText('[value root.first_frame]')
+                    node['first'].setExpression('[value root.first_frame]')
                     fixed_count += 1
 
                 if node.knob('last'):
-                    node['last'].fromUserText('[value root.last_frame]')
+                    node['last'].setExpression('[value root.last_frame]')
 
                 print("  Fixed Read node '{}': frame range now uses root knobs".format(node_name))
 

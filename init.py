@@ -67,12 +67,13 @@ def fix_read_node_frame_ranges():
         for node in nuke.allNodes('Read'):
             try:
                 # Reset first/last frame to use root knobs
+                # Note: first/last are Int_Knob, so we use setExpression() not fromUserText()
                 if node.knob('first'):
-                    node['first'].fromUserText('[value root.first_frame]')
+                    node['first'].setExpression('[value root.first_frame]')
                     fixed_count += 1
 
                 if node.knob('last'):
-                    node['last'].fromUserText('[value root.last_frame]')
+                    node['last'].setExpression('[value root.last_frame]')
 
                 print("  Read '{}': reset frame range to use root knobs".format(node.name()))
 
