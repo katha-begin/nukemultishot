@@ -202,14 +202,21 @@ def get_environment_variables():
             # Convert Windows path to Linux path for render nodes
             ocio_path = ocio_knob.value()
 
-            # Apply path mapping for all drive letters
+            # Apply path mapping for all drive letters (case-insensitive)
+            # Check both uppercase and lowercase drive letters
             path_mappings = {
                 'T:/': '/mnt/ppr_dev_t/',
                 'T:\\': '/mnt/ppr_dev_t/',
+                't:/': '/mnt/ppr_dev_t/',
+                't:\\': '/mnt/ppr_dev_t/',
                 'V:/': '/mnt/igloo_swa_v/',
                 'V:\\': '/mnt/igloo_swa_v/',
+                'v:/': '/mnt/igloo_swa_v/',
+                'v:\\': '/mnt/igloo_swa_v/',
                 'W:/': '/mnt/igloo_swa_w/',
-                'W:\\': '/mnt/igloo_swa_w/'
+                'W:\\': '/mnt/igloo_swa_w/',
+                'w:/': '/mnt/igloo_swa_w/',
+                'w:\\': '/mnt/igloo_swa_w/'
             }
 
             for win_path, linux_path in path_mappings.items():

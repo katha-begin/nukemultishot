@@ -122,14 +122,20 @@ try:
     if platform.system() == 'Linux':
         print("Multishot onScriptLoad: Linux detected, replacing Windows paths...")
 
-        # Path mappings
+        # Path mappings (case-insensitive - handle both uppercase and lowercase)
         path_mappings = {
             'V:/': '/mnt/igloo_swa_v/',
             'V:\\\\': '/mnt/igloo_swa_v/',
+            'v:/': '/mnt/igloo_swa_v/',
+            'v:\\\\': '/mnt/igloo_swa_v/',
             'W:/': '/mnt/igloo_swa_w/',
             'W:\\\\': '/mnt/igloo_swa_w/',
+            'w:/': '/mnt/igloo_swa_w/',
+            'w:\\\\': '/mnt/igloo_swa_w/',
             'T:/': '/mnt/ppr_dev_t/',
-            'T:\\\\': '/mnt/ppr_dev_t/'
+            'T:\\\\': '/mnt/ppr_dev_t/',
+            't:/': '/mnt/ppr_dev_t/',
+            't:\\\\': '/mnt/ppr_dev_t/'
         }
 
         replaced_count = 0
@@ -389,14 +395,20 @@ except Exception as e:
                 root.addKnob(tab)
                 self.logger.debug("Created Multishot tab")
 
-            # Path mappings for OS detection
+            # Path mappings for OS detection (case-insensitive)
             path_mappings = {
                 'V:/': '/mnt/igloo_swa_v/',
                 'V:\\': '/mnt/igloo_swa_v/',
+                'v:/': '/mnt/igloo_swa_v/',
+                'v:\\': '/mnt/igloo_swa_v/',
                 'W:/': '/mnt/igloo_swa_w/',
                 'W:\\': '/mnt/igloo_swa_w/',
+                'w:/': '/mnt/igloo_swa_w/',
+                'w:\\': '/mnt/igloo_swa_w/',
                 'T:/': '/mnt/ppr_dev_t/',
-                'T:\\': '/mnt/ppr_dev_t/'
+                'T:\\': '/mnt/ppr_dev_t/',
+                't:/': '/mnt/ppr_dev_t/',
+                't:\\': '/mnt/ppr_dev_t/'
             }
 
             # ONLY process PROJ_ROOT and IMG_ROOT to avoid conflicts with other knobs
