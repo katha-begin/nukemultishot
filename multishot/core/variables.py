@@ -214,6 +214,18 @@ try:
             try:
                 custom_vars = json.loads(custom_json)
                 print("Multishot onScriptLoad: Parsed custom_vars = " + str(custom_vars))
+
+                # On Linux, replace Windows paths in the custom_vars dictionary
+                if platform.system() == 'Linux':
+                    for key in ['PROJ_ROOT', 'IMG_ROOT']:
+                        if key in custom_vars:
+                            original_value = custom_vars[key]
+                            for win_path, linux_path in path_mappings.items():
+                                if win_path in str(original_value):
+                                    custom_vars[key] = str(original_value).replace(win_path, linux_path).replace('\\\\', '/')
+                                    print("Multishot onScriptLoad: Replaced {} in custom_vars: {} -> {}".format(key, original_value, custom_vars[key]))
+                                    break
+
                 for key, value in custom_vars.items():
                     if key in ['PROJ_ROOT', 'IMG_ROOT']:
                         if key not in nuke.root().knobs():
