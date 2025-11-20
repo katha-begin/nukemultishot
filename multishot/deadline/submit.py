@@ -201,10 +201,22 @@ def get_environment_variables():
         if ocio_knob and ocio_knob.value():
             # Convert Windows path to Linux path for render nodes
             ocio_path = ocio_knob.value()
-            # Apply path mapping: T:/ -> /mnt/ppr_dev_t/
-            if ocio_path.startswith('T:/') or ocio_path.startswith('T:\\'):
-                ocio_path = ocio_path.replace('T:/', '/mnt/ppr_dev_t/').replace('T:\\', '/mnt/ppr_dev_t/')
-                ocio_path = ocio_path.replace('\\', '/')
+
+            # Apply path mapping for all drive letters
+            path_mappings = {
+                'T:/': '/mnt/ppr_dev_t/',
+                'T:\\': '/mnt/ppr_dev_t/',
+                'V:/': '/mnt/igloo_swa_v/',
+                'V:\\': '/mnt/igloo_swa_v/',
+                'W:/': '/mnt/igloo_swa_w/',
+                'W:\\': '/mnt/igloo_swa_w/'
+            }
+
+            for win_path, linux_path in path_mappings.items():
+                if ocio_path.startswith(win_path):
+                    ocio_path = ocio_path.replace(win_path, linux_path).replace('\\', '/')
+                    break
+
             env_vars['OCIO'] = ocio_path
         else:
             # Use default OCIO path (Linux path for render nodes)

@@ -162,8 +162,36 @@ try:
                     replaced_count += 1
                     print("  Write '{}': {} -> {}".format(node.name(), original_path, file_path))
 
-        # Replace paths in root knobs (PROJ_ROOT, IMG_ROOT)
-        for knob_name in ['PROJ_ROOT', 'IMG_ROOT']:
+        # Replace paths in all ReadGeo nodes
+        for node in nuke.allNodes('ReadGeo') + nuke.allNodes('ReadGeo2'):
+            if node.knob('file'):
+                file_path = node['file'].value()
+                original_path = file_path
+                for win_path, linux_path in path_mappings.items():
+                    if win_path in file_path:
+                        file_path = file_path.replace(win_path, linux_path)
+                        file_path = file_path.replace('\\\\', '/')
+                if file_path != original_path:
+                    node['file'].setValue(file_path)
+                    replaced_count += 1
+                    print("  ReadGeo '{}': {} -> {}".format(node.name(), original_path, file_path))
+
+        # Replace paths in all Camera nodes
+        for node in nuke.allNodes('Camera') + nuke.allNodes('Camera2'):
+            if node.knob('file'):
+                file_path = node['file'].value()
+                original_path = file_path
+                for win_path, linux_path in path_mappings.items():
+                    if win_path in file_path:
+                        file_path = file_path.replace(win_path, linux_path)
+                        file_path = file_path.replace('\\\\', '/')
+                if file_path != original_path:
+                    node['file'].setValue(file_path)
+                    replaced_count += 1
+                    print("  Camera '{}': {} -> {}".format(node.name(), original_path, file_path))
+
+        # Replace paths in root knobs (PROJ_ROOT, IMG_ROOT, customOCIOConfigPath)
+        for knob_name in ['PROJ_ROOT', 'IMG_ROOT', 'customOCIOConfigPath']:
             if nuke.root().knob(knob_name):
                 knob_value = nuke.root()[knob_name].value()
                 original_value = knob_value
