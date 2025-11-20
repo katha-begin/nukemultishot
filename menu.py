@@ -57,6 +57,12 @@ try:
                 tooltip='Submit to Deadline with automatic environment variable setup'
             )
 
+            multishot_menu.addCommand(
+                'Submit to Deadline (Vanilla - No Callbacks)',
+                'import multishot.deadline; multishot.deadline.submit_to_deadline_vanilla()',
+                tooltip='Submit to Deadline with ALL callbacks disabled (for testing)'
+            )
+
             multishot_menu.addSeparator()
 
             # Add utility commands

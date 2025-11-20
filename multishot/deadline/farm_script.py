@@ -189,6 +189,52 @@ class FarmScriptManager:
 
         return converted_path
 
+    def remove_all_callbacks(self):
+        """
+        Remove all multishot callbacks from the script for vanilla Deadline submission.
+
+        This removes:
+        - onScriptLoad callback
+        - beforeRender callbacks on Write nodes
+        - afterRender callbacks on Write nodes
+        """
+        try:
+            import nuke
+
+            self.logger.info("Removing all callbacks for vanilla Deadline submission...")
+
+            # Remove onScriptLoad callback
+            if nuke.root().knob('onScriptLoad'):
+                original_callback = nuke.root()['onScriptLoad'].value()
+                if original_callback:
+                    self.logger.info(f"Removing onScriptLoad callback ({len(original_callback)} chars)")
+                    nuke.root()['onScriptLoad'].setValue('')
+
+            # Remove beforeRender and afterRender from all Write nodes
+            write_nodes = nuke.allNodes('Write')
+            callback_count = 0
+
+            for node in write_nodes:
+                # Remove beforeRender
+                if node.knob('beforeRender'):
+                    before_callback = node['beforeRender'].value()
+                    if before_callback:
+                        node['beforeRender'].setValue('')
+                        callback_count += 1
+
+                # Remove afterRender
+                if node.knob('afterRender'):
+                    after_callback = node['afterRender'].value()
+                    if after_callback:
+                        node['afterRender'].setValue('')
+                        callback_count += 1
+
+            self.logger.info(f"Removed callbacks from {callback_count} Write node knobs")
+
+        except Exception as e:
+            self.logger.error(f"Error removing callbacks: {e}")
+            raise
+
     def bake_expressions_to_static(self):
         """
         Bake all expressions in the script to static values and convert to Linux paths.
@@ -271,13 +317,14 @@ class FarmScriptManager:
             self.logger.error(f"Error baking expressions: {e}")
             raise
 
-    def create_farm_script(self, shot_data: dict, original_script_path: str) -> str:
+    def create_farm_script(self, shot_data: dict, original_script_path: str, disable_callbacks: bool = False) -> str:
         """
         Create a farm script with baked expressions.
 
         Args:
             shot_data: Shot context (project, ep, seq, shot)
             original_script_path: Path to original Nuke script
+            disable_callbacks: If True, remove all multishot callbacks for vanilla submission
 
         Returns:
             Path to created farm script
@@ -287,6 +334,11 @@ class FarmScriptManager:
 
             # Get farm script path
             farm_script_path = self.get_farm_script_path(shot_data, original_script_path)
+
+            # Remove callbacks if requested (for vanilla testing)
+            if disable_callbacks:
+                self.logger.info("VANILLA MODE: Disabling all callbacks")
+                self.remove_all_callbacks()
 
             # Bake all expressions
             self.bake_expressions_to_static()

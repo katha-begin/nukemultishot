@@ -305,6 +305,61 @@ def _patch_deadline_submission():
         return False
 
 
+def submit_to_deadline_vanilla():
+    """
+    Submit to Deadline with ALL callbacks disabled (vanilla submission).
+
+    This is for testing - removes all multishot callbacks to isolate issues.
+    """
+    try:
+        import nuke
+        from ..deadline.farm_script import FarmScriptManager
+        from ..core.variables import VariableManager
+
+        # Check if script is saved
+        script_path = nuke.root().name()
+        if script_path == 'Root' or not script_path:
+            nuke.message("Please save your script before submitting to Deadline.")
+            return
+
+        print("\n" + "=" * 70)
+        print("VANILLA DEADLINE SUBMISSION (NO CALLBACKS)")
+        print("=" * 70)
+        print("\nScript: {}".format(script_path))
+
+        # Get shot data
+        var_manager = VariableManager()
+        shot_data = {
+            'project': var_manager.get_variable('multishot_project'),
+            'ep': var_manager.get_variable('multishot_ep'),
+            'seq': var_manager.get_variable('multishot_seq'),
+            'shot': var_manager.get_variable('multishot_shot'),
+            'PROJ_ROOT': var_manager.get_variable('PROJ_ROOT'),
+            'IMG_ROOT': var_manager.get_variable('IMG_ROOT')
+        }
+
+        # Create farm script with callbacks disabled
+        farm_manager = FarmScriptManager()
+        farm_script = farm_manager.create_farm_script(shot_data, script_path, disable_callbacks=True)
+
+        print("\nVanilla farm script created: {}".format(farm_script))
+        print("All callbacks have been removed from this script.")
+        print("\nNow submit this farm script to Deadline using standard submission.")
+        print("=" * 70 + "\n")
+
+        nuke.message(
+            "Vanilla farm script created:\n\n{}\n\n"
+            "All callbacks removed.\n\n"
+            "Now submit this script to Deadline.".format(farm_script)
+        )
+
+    except Exception as e:
+        import traceback
+        print("\nERROR in vanilla submission:")
+        traceback.print_exc()
+        nuke.message("Error creating vanilla farm script:\n\n{}".format(str(e)))
+
+
 def submit_to_deadline():
     """
     Submit current Nuke script to Deadline with multishot environment variables.
