@@ -1388,33 +1388,64 @@ class MultishotManagerDialog(BaseWidget):
             # Format: {ep}_{seq}_{shot}
             shot_name = f"{shot_data['ep']}_{shot_data['seq']}_{shot_data['shot']}"
 
-            # Scan for existing versions in the directory
-            # Look for files matching: {shotName}_v###.nk
-            existing_versions = []
-            pattern = re.compile(rf"^{re.escape(shot_name)}_v(\d{{3}})\.nk$")
+            # Get current script name
+            current_script = nuke.root().name()
 
-            try:
-                for filename in os.listdir(shot_dir):
-                    match = pattern.match(filename)
-                    if match:
-                        version_num = int(match.group(1))
-                        existing_versions.append(version_num)
-            except Exception as e:
-                self.logger.warning(f"Could not scan directory for versions: {e}")
+            # Check if current script is saved
+            if not current_script or current_script == 'Root':
+                QtWidgets.QMessageBox.warning(
+                    self,
+                    "Script Not Saved",
+                    "Please save your script first before using this feature."
+                )
+                return
 
-            # Determine next version number
-            if existing_versions:
-                next_version_num = max(existing_versions) + 1
-                self.logger.info(f"Found existing versions: {existing_versions}, next version: {next_version_num}")
+            # Extract version from current script filename
+            # Look for pattern: {anything}_v###.nk
+            current_version = None
+            current_basename = os.path.basename(current_script)
+            version_pattern = re.compile(r"_v(\d{3})\.nk$")
+            version_match = version_pattern.search(current_basename)
+
+            if version_match:
+                current_version = version_match.group(1)
+                self.logger.info(f"Current script version: v{current_version}")
             else:
-                next_version_num = 1
-                self.logger.info("No existing versions found, starting with v001")
+                self.logger.warning(f"Could not extract version from current script: {current_basename}")
+
+            # Determine version number to use
+            if current_version:
+                # Use current version number
+                version_num = int(current_version)
+                self.logger.info(f"Using current version: v{version_num:03d}")
+            else:
+                # Scan for existing versions in the directory
+                # Look for files matching: {shotName}_v###.nk
+                existing_versions = []
+                pattern = re.compile(rf"^{re.escape(shot_name)}_v(\d{{3}})\.nk$")
+
+                try:
+                    for filename in os.listdir(shot_dir):
+                        match = pattern.match(filename)
+                        if match:
+                            version_num_found = int(match.group(1))
+                            existing_versions.append(version_num_found)
+                except Exception as e:
+                    self.logger.warning(f"Could not scan directory for versions: {e}")
+
+                # Determine next version number
+                if existing_versions:
+                    version_num = max(existing_versions) + 1
+                    self.logger.info(f"Found existing versions: {existing_versions}, next version: {version_num}")
+                else:
+                    version_num = 1
+                    self.logger.info("No existing versions found, starting with v001")
 
             # Format version as v001, v002, etc.
-            next_version = f"v{next_version_num:03d}"
+            version_str = f"v{version_num:03d}"
 
-            # Build filename: {shotName}_{next_version}.nk
-            filename = f"{shot_name}_{next_version}.nk"
+            # Build filename: {shotName}_{version}.nk
+            filename = f"{shot_name}_{version_str}.nk"
 
             # Build full save path
             save_path = os.path.join(shot_dir, filename)
@@ -1427,18 +1458,6 @@ class MultishotManagerDialog(BaseWidget):
                 QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
             )
             if reply != QtWidgets.QMessageBox.Yes:
-                return
-
-            # Get current script name
-            current_script = nuke.root().name()
-
-            # Check if current script is saved
-            if not current_script or current_script == 'Root':
-                QtWidgets.QMessageBox.warning(
-                    self,
-                    "Script Not Saved",
-                    "Please save your script first before using this feature."
-                )
                 return
 
             # Save current script first
