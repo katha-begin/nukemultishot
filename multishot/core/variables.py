@@ -455,6 +455,13 @@ except Exception as e:
             import nuke
             root = nuke.root()
 
+            # Ensure Multishot tab exists BEFORE adding knobs
+            # This ensures all multishot knobs are in the same tab
+            if 'multishot_tab' not in root.knobs():
+                tab = nuke.Tab_Knob('multishot_tab', 'Multishot')
+                root.addKnob(tab)
+                self.logger.debug("Created Multishot tab")
+
             # Get current context variables
             context_vars = self.get_context_variables()
 
