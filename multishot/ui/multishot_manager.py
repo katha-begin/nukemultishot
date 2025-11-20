@@ -1275,6 +1275,11 @@ class MultishotManagerDialog(BaseWidget):
                 self.logger.info(f"Submitting {len(selected_writes)} Write nodes to render farm")
 
                 try:
+                    # CRITICAL: Ensure all variables are embedded in script BEFORE creating farm script
+                    from ..deadline.submit import ensure_variables_before_submission
+                    self.logger.info("Ensuring variables are embedded in script...")
+                    ensure_variables_before_submission()
+
                     # Get frame range BEFORE creating farm script
                     first_frame = int(nuke.root()['first_frame'].value())
                     last_frame = int(nuke.root()['last_frame'].value())
