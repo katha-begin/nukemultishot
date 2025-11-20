@@ -1286,11 +1286,7 @@ class MultishotManagerDialog(BaseWidget):
                 button.setText("Linux")
                 button.setStyleSheet("background-color: #FF8C42;")  # Orange
 
-            QtWidgets.QMessageBox.information(
-                self,
-                "OS Toggle Complete",
-                f"Successfully toggled paths from {current_os} to {new_os}."
-            )
+            self.logger.info(f"Toggled paths from {current_os} to {new_os}")
 
         except Exception as e:
             self.logger.error(f"Error toggling OS: {e}")
@@ -1392,80 +1388,59 @@ class MultishotManagerDialog(BaseWidget):
             # Format: {ep}_{seq}_{shot}
             shot_name = f"{shot_data['ep']}_{shot_data['seq']}_{shot_data['shot']}"
 
-            # Determine filename based on save location
-            if save_location == 'farm':
-                # Farm: Just shotname.nk (no version number)
-                filename = f"{shot_name}.nk"
-                save_path = os.path.join(shot_dir, filename)
+            # Scan for existing versions in the directory
+            # Look for files matching: {shotName}_v###.nk
+            existing_versions = []
+            pattern = re.compile(rf"^{re.escape(shot_name)}_v(\d{{3}})\.nk$")
 
-                # Confirm save (farm will overwrite)
-                if os.path.exists(save_path):
-                    reply = QtWidgets.QMessageBox.question(
-                        self,
-                        "Save Script",
-                        f"Farm script already exists:\n{save_path}\n\nOverwrite?",
-                        QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
-                    )
-                    if reply != QtWidgets.QMessageBox.Yes:
-                        return
-                else:
-                    # Confirm save
-                    reply = QtWidgets.QMessageBox.question(
-                        self,
-                        "Save Script",
-                        f"Save script to:\n{save_path}\n\nContinue?",
-                        QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
-                    )
-                    if reply != QtWidgets.QMessageBox.Yes:
-                        return
+            try:
+                for filename in os.listdir(shot_dir):
+                    match = pattern.match(filename)
+                    if match:
+                        version_num = int(match.group(1))
+                        existing_versions.append(version_num)
+            except Exception as e:
+                self.logger.warning(f"Could not scan directory for versions: {e}")
 
+            # Determine next version number
+            if existing_versions:
+                next_version_num = max(existing_versions) + 1
+                self.logger.info(f"Found existing versions: {existing_versions}, next version: {next_version_num}")
             else:
-                # Version: Scan for existing versions and increment
-                # Look for files matching: {shotName}_v###.nk
-                existing_versions = []
-                pattern = re.compile(rf"^{re.escape(shot_name)}_v(\d{{3}})\.nk$")
+                next_version_num = 1
+                self.logger.info("No existing versions found, starting with v001")
 
-                try:
-                    for filename in os.listdir(shot_dir):
-                        match = pattern.match(filename)
-                        if match:
-                            version_num = int(match.group(1))
-                            existing_versions.append(version_num)
-                except Exception as e:
-                    self.logger.warning(f"Could not scan directory for versions: {e}")
+            # Format version as v001, v002, etc.
+            next_version = f"v{next_version_num:03d}"
 
-                # Determine next version number
-                if existing_versions:
-                    next_version_num = max(existing_versions) + 1
-                    self.logger.info(f"Found existing versions: {existing_versions}, next version: {next_version_num}")
-                else:
-                    next_version_num = 1
-                    self.logger.info("No existing versions found, starting with v001")
+            # Build filename: {shotName}_{next_version}.nk
+            filename = f"{shot_name}_{next_version}.nk"
 
-                # Format version as v001, v002, etc.
-                next_version = f"v{next_version_num:03d}"
+            # Build full save path
+            save_path = os.path.join(shot_dir, filename)
 
-                # Build filename: {shotName}_{next_version}.nk
-                filename = f"{shot_name}_{next_version}.nk"
+            # Confirm save
+            reply = QtWidgets.QMessageBox.question(
+                self,
+                "Save Script",
+                f"Save script to:\n{save_path}\n\nContinue?",
+                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
+            )
+            if reply != QtWidgets.QMessageBox.Yes:
+                return
 
-                # Build full save path
-                save_path = os.path.join(shot_dir, filename)
-
-                # Confirm save
-                reply = QtWidgets.QMessageBox.question(
-                    self,
-                    "Save Script",
-                    f"Save script to:\n{save_path}\n\nContinue?",
-                    QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
-                )
-                if reply != QtWidgets.QMessageBox.Yes:
-                    return
+            # Get current script name to restore later
+            current_script = nuke.root().name()
 
             # Save script in background (overwrite=1 means no dialog)
             self.logger.info(f"Saving script to: {save_path}")
             nuke.scriptSaveAs(save_path, overwrite=1)
-
             self.logger.info(f"Script saved successfully: {save_path}")
+
+            # Restore original script name (so current script doesn't change)
+            if current_script and current_script != 'Root':
+                nuke.scriptOpen(current_script)
+                self.logger.info(f"Restored current script: {current_script}")
 
             QtWidgets.QMessageBox.information(
                 self,
