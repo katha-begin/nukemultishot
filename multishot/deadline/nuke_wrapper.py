@@ -16,6 +16,7 @@ import os
 import re
 import sys
 import subprocess
+import json
 
 
 def fix_viewer_process_in_script(script_path):
@@ -74,6 +75,137 @@ def fix_viewer_process_in_script(script_path):
             
     except Exception as e:
         print("ERROR: Could not fix script file: {}".format(e))
+        import traceback
+        traceback.print_exc()
+        print("=" * 70 + "\n")
+        return False
+
+
+def fix_multishot_paths_in_script(script_path):
+    """
+    Convert Windows paths to Linux paths in multishot_custom JSON knob.
+
+    This ensures that PROJ_ROOT and IMG_ROOT have correct Linux paths on render nodes.
+
+    Args:
+        script_path: Path to the .nk script file
+
+    Returns:
+        True if modifications were made, False otherwise
+    """
+    if not os.path.exists(script_path):
+        return False
+
+    print("\n" + "=" * 70)
+    print("MULTISHOT: Converting Windows paths to Linux paths in script")
+    print("=" * 70)
+    print("Script: {}".format(script_path))
+
+    try:
+        # Read the script file
+        with open(script_path, 'r') as f:
+            content = f.read()
+
+        original_content = content
+        modifications = []
+
+        # Path mappings (case-insensitive)
+        path_mappings = {
+            'T:/': '/mnt/ppr_dev_t/',
+            'T:\\\\': '/mnt/ppr_dev_t/',
+            't:/': '/mnt/ppr_dev_t/',
+            't:\\\\': '/mnt/ppr_dev_t/',
+            'V:/': '/mnt/igloo_swa_v/',
+            'V:\\\\': '/mnt/igloo_swa_v/',
+            'v:/': '/mnt/igloo_swa_v/',
+            'v:\\\\': '/mnt/igloo_swa_v/',
+            'W:/': '/mnt/igloo_swa_w/',
+            'W:\\\\': '/mnt/igloo_swa_w/',
+            'w:/': '/mnt/igloo_swa_w/',
+            'w:\\\\': '/mnt/igloo_swa_w/'
+        }
+
+        # Find and fix multishot_custom JSON knob
+        # Pattern: multishot_custom <JSON string>
+        pattern = r'(multishot_custom\s+)(\{[^}]+\})'
+
+        def replace_multishot_custom(match):
+            prefix = match.group(1)
+            json_str = match.group(2)
+
+            try:
+                # Parse JSON
+                data = json.loads(json_str)
+                modified = False
+
+                # Convert paths in PROJ_ROOT and IMG_ROOT
+                for key in ['PROJ_ROOT', 'IMG_ROOT']:
+                    if key in data:
+                        original_value = data[key]
+                        new_value = original_value
+
+                        # Apply path mappings
+                        for win_path, linux_path in path_mappings.items():
+                            if win_path in new_value:
+                                new_value = new_value.replace(win_path, linux_path).replace('\\\\', '/')
+                                modifications.append("  {}: {} -> {}".format(key, original_value, new_value))
+                                modified = True
+                                break
+
+                        data[key] = new_value
+
+                if modified:
+                    # Convert back to JSON (compact format)
+                    new_json_str = json.dumps(data, separators=(',', ':'))
+                    return prefix + new_json_str
+                else:
+                    return match.group(0)
+
+            except Exception as e:
+                print("  WARNING: Could not parse multishot_custom JSON: {}".format(e))
+                return match.group(0)
+
+        content = re.sub(pattern, replace_multishot_custom, content)
+
+        # Also fix individual PROJ_ROOT and IMG_ROOT knobs
+        # Pattern: PROJ_ROOT <value> or IMG_ROOT <value>
+        for knob_name in ['PROJ_ROOT', 'IMG_ROOT']:
+            pattern = r'({}\s+)([^\s\n]+)'.format(knob_name)
+
+            def replace_root_knob(match):
+                prefix = match.group(1)
+                value = match.group(2)
+                original_value = value
+
+                # Apply path mappings
+                for win_path, linux_path in path_mappings.items():
+                    if win_path in value:
+                        value = value.replace(win_path, linux_path).replace('\\\\', '/')
+                        modifications.append("  {} knob: {} -> {}".format(knob_name, original_value, value))
+                        break
+
+                return prefix + value
+
+            content = re.sub(pattern, replace_root_knob, content)
+
+        # Check if any modifications were made
+        if content != original_content:
+            # Write back to file
+            with open(script_path, 'w') as f:
+                f.write(content)
+
+            print("\nPath conversions made:")
+            for mod in modifications:
+                print(mod)
+            print("=" * 70 + "\n")
+            return True
+        else:
+            print("No path conversions needed (already Linux paths)")
+            print("=" * 70 + "\n")
+            return False
+
+    except Exception as e:
+        print("ERROR: Could not fix multishot paths: {}".format(e))
         import traceback
         traceback.print_exc()
         print("=" * 70 + "\n")
@@ -182,10 +314,15 @@ def main():
             script_path = arg
             break
 
-    # CRITICAL: Set OCIO environment variable BEFORE launching Nuke
+    # CRITICAL: Fix script BEFORE launching Nuke
+    # Order matters:
+    # 1. Fix multishot paths (multishot_custom, PROJ_ROOT, IMG_ROOT) - FIRST PRIORITY
+    # 2. Set OCIO environment variable
+    # 3. Fix viewer process settings
     if script_path:
-        set_ocio_from_script(script_path)
-        fix_viewer_process_in_script(script_path)
+        fix_multishot_paths_in_script(script_path)  # FIRST: Convert Windows paths to Linux
+        set_ocio_from_script(script_path)           # SECOND: Set OCIO env var
+        fix_viewer_process_in_script(script_path)   # THIRD: Fix viewer settings
 
     # Launch Nuke with the original arguments
     cmd = [nuke_exe] + nuke_args
