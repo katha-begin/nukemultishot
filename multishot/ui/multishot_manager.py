@@ -1429,18 +1429,27 @@ class MultishotManagerDialog(BaseWidget):
             if reply != QtWidgets.QMessageBox.Yes:
                 return
 
-            # Get current script name to restore later
+            # Get current script name
             current_script = nuke.root().name()
 
-            # Save script in background (overwrite=1 means no dialog)
-            self.logger.info(f"Saving script to: {save_path}")
-            nuke.scriptSaveAs(save_path, overwrite=1)
-            self.logger.info(f"Script saved successfully: {save_path}")
+            # Check if current script is saved
+            if not current_script or current_script == 'Root':
+                QtWidgets.QMessageBox.warning(
+                    self,
+                    "Script Not Saved",
+                    "Please save your script first before using this feature."
+                )
+                return
 
-            # Restore original script name (so current script doesn't change)
-            if current_script and current_script != 'Root':
-                nuke.scriptOpen(current_script)
-                self.logger.info(f"Restored current script: {current_script}")
+            # Save current script first
+            self.logger.info(f"Saving current script: {current_script}")
+            nuke.scriptSave()
+
+            # Copy the saved script to target location
+            import shutil
+            self.logger.info(f"Copying script to: {save_path}")
+            shutil.copy2(current_script, save_path)
+            self.logger.info(f"Script copied successfully: {save_path}")
 
             QtWidgets.QMessageBox.information(
                 self,
