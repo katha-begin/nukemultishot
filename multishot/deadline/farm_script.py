@@ -289,6 +289,13 @@ class FarmScriptManager:
                         if file_path != linux_path:
                             self.logger.debug(f"Converted path: {file_path} -> {linux_path}")
 
+                    # CRITICAL: Set format on Write node to prevent 640x480 default
+                    # This ensures the correct resolution even if onScriptLoad callback fails
+                    if node.knob('format'):
+                        root_format = nuke.root()['format'].value()
+                        node['format'].setValue(root_format.name())
+                        self.logger.info(f"Set format on Write '{node.name()}': {root_format.name()} ({root_format.width()}x{root_format.height()})")
+
                     write_count += 1
                     self.logger.debug(f"Baked Write node: {node.name()}")
 
