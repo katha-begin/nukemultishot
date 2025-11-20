@@ -1303,11 +1303,49 @@ class MultishotManagerDialog(BaseWidget):
             )
 
     def _save_to_shot_directory(self, shot_data):
-        """Save Nuke script to target shot directory in the background."""
+        """Save Nuke script to target shot directory - let user choose farm or version."""
         try:
             import nuke
             import os
             import re
+
+            # Ask user to choose save location
+            dialog = QtWidgets.QDialog(self)
+            dialog.setWindowTitle("Save Script")
+            dialog.setModal(True)
+
+            layout = QtWidgets.QVBoxLayout()
+
+            label = QtWidgets.QLabel("Choose save location:")
+            layout.addWidget(label)
+
+            # Radio buttons for farm or version
+            farm_radio = QtWidgets.QRadioButton("Farm (comp/farm/)")
+            version_radio = QtWidgets.QRadioButton("Version (comp/version/)")
+            version_radio.setChecked(True)  # Default to version
+
+            layout.addWidget(farm_radio)
+            layout.addWidget(version_radio)
+
+            # OK/Cancel buttons
+            button_box = QtWidgets.QDialogButtonBox(
+                QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel
+            )
+            button_box.accepted.connect(dialog.accept)
+            button_box.rejected.connect(dialog.reject)
+            layout.addWidget(button_box)
+
+            dialog.setLayout(layout)
+
+            # Show dialog
+            if dialog.exec_() != QtWidgets.QDialog.Accepted:
+                return
+
+            # Determine save location
+            if farm_radio.isChecked():
+                save_location = 'farm'
+            else:
+                save_location = 'version'
 
             # Get PROJ_ROOT
             proj_root = self.variable_manager.get_variable('PROJ_ROOT')
@@ -1324,7 +1362,7 @@ class MultishotManagerDialog(BaseWidget):
                 proj_root = proj_root[:-1]
 
             # Build shot directory path
-            # Format: {PROJ_ROOT}/{project}/all/scene/{ep}/{seq}/{shot}/comp/version/
+            # Format: {PROJ_ROOT}/{project}/all/scene/{ep}/{seq}/{shot}/comp/{farm|version}/
             shot_dir = os.path.join(
                 proj_root,
                 shot_data['project'],
@@ -1334,7 +1372,7 @@ class MultishotManagerDialog(BaseWidget):
                 shot_data['seq'],
                 shot_data['shot'],
                 'comp',
-                'version'
+                save_location
             )
 
             # Create directory if it doesn't exist
@@ -1354,47 +1392,74 @@ class MultishotManagerDialog(BaseWidget):
             # Format: {ep}_{seq}_{shot}
             shot_name = f"{shot_data['ep']}_{shot_data['seq']}_{shot_data['shot']}"
 
-            # Scan for existing versions in the directory
-            # Look for files matching: {shotName}_v###.nk
-            existing_versions = []
-            pattern = re.compile(rf"^{re.escape(shot_name)}_v(\d{{3}})\.nk$")
+            # Determine filename based on save location
+            if save_location == 'farm':
+                # Farm: Just shotname.nk (no version number)
+                filename = f"{shot_name}.nk"
+                save_path = os.path.join(shot_dir, filename)
 
-            try:
-                for filename in os.listdir(shot_dir):
-                    match = pattern.match(filename)
-                    if match:
-                        version_num = int(match.group(1))
-                        existing_versions.append(version_num)
-            except Exception as e:
-                self.logger.warning(f"Could not scan directory for versions: {e}")
+                # Confirm save (farm will overwrite)
+                if os.path.exists(save_path):
+                    reply = QtWidgets.QMessageBox.question(
+                        self,
+                        "Save Script",
+                        f"Farm script already exists:\n{save_path}\n\nOverwrite?",
+                        QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
+                    )
+                    if reply != QtWidgets.QMessageBox.Yes:
+                        return
+                else:
+                    # Confirm save
+                    reply = QtWidgets.QMessageBox.question(
+                        self,
+                        "Save Script",
+                        f"Save script to:\n{save_path}\n\nContinue?",
+                        QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
+                    )
+                    if reply != QtWidgets.QMessageBox.Yes:
+                        return
 
-            # Determine next version number
-            if existing_versions:
-                next_version_num = max(existing_versions) + 1
-                self.logger.info(f"Found existing versions: {existing_versions}, next version: {next_version_num}")
             else:
-                next_version_num = 1
-                self.logger.info("No existing versions found, starting with v001")
+                # Version: Scan for existing versions and increment
+                # Look for files matching: {shotName}_v###.nk
+                existing_versions = []
+                pattern = re.compile(rf"^{re.escape(shot_name)}_v(\d{{3}})\.nk$")
 
-            # Format version as v001, v002, etc.
-            next_version = f"v{next_version_num:03d}"
+                try:
+                    for filename in os.listdir(shot_dir):
+                        match = pattern.match(filename)
+                        if match:
+                            version_num = int(match.group(1))
+                            existing_versions.append(version_num)
+                except Exception as e:
+                    self.logger.warning(f"Could not scan directory for versions: {e}")
 
-            # Build filename: {shotName}_{next_version}.nk
-            filename = f"{shot_name}_{next_version}.nk"
+                # Determine next version number
+                if existing_versions:
+                    next_version_num = max(existing_versions) + 1
+                    self.logger.info(f"Found existing versions: {existing_versions}, next version: {next_version_num}")
+                else:
+                    next_version_num = 1
+                    self.logger.info("No existing versions found, starting with v001")
 
-            # Build full save path
-            save_path = os.path.join(shot_dir, filename)
+                # Format version as v001, v002, etc.
+                next_version = f"v{next_version_num:03d}"
 
-            # Confirm save
-            reply = QtWidgets.QMessageBox.question(
-                self,
-                "Save Script",
-                f"Save script to:\n{save_path}\n\nContinue?",
-                QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
-            )
+                # Build filename: {shotName}_{next_version}.nk
+                filename = f"{shot_name}_{next_version}.nk"
 
-            if reply != QtWidgets.QMessageBox.Yes:
-                return
+                # Build full save path
+                save_path = os.path.join(shot_dir, filename)
+
+                # Confirm save
+                reply = QtWidgets.QMessageBox.question(
+                    self,
+                    "Save Script",
+                    f"Save script to:\n{save_path}\n\nContinue?",
+                    QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No
+                )
+                if reply != QtWidgets.QMessageBox.Yes:
+                    return
 
             # Save script in background (overwrite=1 means no dialog)
             self.logger.info(f"Saving script to: {save_path}")
