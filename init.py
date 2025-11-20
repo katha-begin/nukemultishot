@@ -201,6 +201,7 @@ def ensure_variables_for_batch_mode():
 
         # Also update existing PROJ_ROOT and IMG_ROOT knobs if they were already in the script
         # (in case they weren't created from JSON above)
+        print("\nDEBUG: Checking for existing PROJ_ROOT and IMG_ROOT knobs...")
         for key in ['PROJ_ROOT', 'IMG_ROOT']:
             if key in all_knobs:
                 # Knob exists - read its current value from the .nk file
@@ -219,6 +220,7 @@ def ensure_variables_for_batch_mode():
                 # Update the knob value
                 root[key].setValue(final_value)
                 print("  Updated {} = {}".format(key, final_value))
+            else:
                 print("DEBUG: Knob {} does NOT exist - trying to create from JSON...".format(key))
                 if 'multishot_custom' in all_knobs:
                     custom_json = root['multishot_custom'].value()
