@@ -92,8 +92,8 @@ class MultishotManagerDialog(BaseWidget):
         self.shots_table.setSelectionBehavior(QtWidgets.QAbstractItemView.SelectRows)
         self.shots_table.setAlternatingRowColors(True)
 
-        # Setup columns: # | Shot | Set Shot | Version | Remove | Bake | Unbake | Save | Render
-        columns = ['#', 'Shot', 'Set Shot', 'Version', 'Remove', 'Bake', 'Unbake', 'Save', 'Render']
+        # Setup columns: # | Shot | Set Shot | Version | Remove | Bake | Unbake | Toggle OS | Save | Render
+        columns = ['#', 'Shot', 'Set Shot', 'Version', 'Remove', 'Bake', 'Unbake', 'Toggle OS', 'Save', 'Render']
         self.shots_table.setColumnCount(len(columns))
         self.shots_table.setHorizontalHeaderLabels(columns)
 
@@ -107,8 +107,9 @@ class MultishotManagerDialog(BaseWidget):
         header.resizeSection(4, 80)   # Remove
         header.resizeSection(5, 80)   # Bake
         header.resizeSection(6, 80)   # Unbake
-        header.resizeSection(7, 80)   # Save
-        header.resizeSection(8, 80)   # Render
+        header.resizeSection(7, 80)   # Toggle OS
+        header.resizeSection(8, 80)   # Save
+        header.resizeSection(9, 80)   # Render
 
         layout.addWidget(self.shots_table)
 
@@ -398,23 +399,44 @@ class MultishotManagerDialog(BaseWidget):
             unbake_btn.clicked.connect(lambda checked=False, sd=shot_data: self._unbake_expressions(sd))
             self.shots_table.setCellWidget(row, 6, unbake_btn)
 
-            # Column 7: Save button
+            # Column 7: Toggle OS button
+            toggle_os_btn = QtWidgets.QPushButton("Win")
+            toggle_os_btn.setMaximumWidth(80)
+            toggle_os_btn.setToolTip("Toggle between Windows and Linux paths")
+            # Check current OS from PROJ_ROOT
+            current_os = self._get_current_os()
+            if current_os == 'Windows':
+                toggle_os_btn.setText("Win")
+                toggle_os_btn.setStyleSheet("background-color: #4A90E2;")  # Blue for Windows
+            else:
+                toggle_os_btn.setText("Linux")
+                toggle_os_btn.setStyleSheet("background-color: #FF8C42;")  # Orange for Linux
+            if is_current:
+                # Add green border for current shot
+                if current_os == 'Windows':
+                    toggle_os_btn.setStyleSheet("background-color: #4A90E2; border: 2px solid #90EE90;")
+                else:
+                    toggle_os_btn.setStyleSheet("background-color: #FF8C42; border: 2px solid #90EE90;")
+            toggle_os_btn.clicked.connect(lambda checked=False, btn=toggle_os_btn: self._toggle_os(btn))
+            self.shots_table.setCellWidget(row, 7, toggle_os_btn)
+
+            # Column 8: Save button
             save_btn = QtWidgets.QPushButton("Save")
             save_btn.setMaximumWidth(80)
             save_btn.setToolTip("Save script to shot directory")
             if is_current:
                 save_btn.setStyleSheet("background-color: #90EE90;")
             save_btn.clicked.connect(lambda checked=False, sd=shot_data: self._save_to_shot_directory(sd))
-            self.shots_table.setCellWidget(row, 7, save_btn)
+            self.shots_table.setCellWidget(row, 8, save_btn)
 
-            # Column 8: Render button
+            # Column 9: Render button
             render_btn = QtWidgets.QPushButton("Render")
             render_btn.setMaximumWidth(80)
             render_btn.setToolTip("Submit to render farm")
             if is_current:
                 render_btn.setStyleSheet("background-color: #90EE90;")
             render_btn.clicked.connect(lambda checked=False, sd=shot_data: self._submit_to_render_farm(sd))
-            self.shots_table.setCellWidget(row, 8, render_btn)
+            self.shots_table.setCellWidget(row, 9, render_btn)
 
         except Exception as e:
             self.logger.error(f"Error adding shot row: {e}")
@@ -1122,6 +1144,162 @@ class MultishotManagerDialog(BaseWidget):
                 self,
                 "Error",
                 f"Failed to unbake expressions:\n{e}"
+            )
+
+    def _get_current_os(self):
+        """
+        Get current OS from PROJ_ROOT knob.
+
+        Returns:
+            str: 'Windows' if PROJ_ROOT starts with drive letter (V:/, W:/, etc.), 'Linux' otherwise
+        """
+        try:
+            import nuke
+            root = nuke.root()
+
+            if root.knob('PROJ_ROOT'):
+                proj_root = root['PROJ_ROOT'].value()
+                # Check if it starts with Windows drive letter (V:/, W:/, T:/, etc.)
+                if proj_root and len(proj_root) >= 2 and proj_root[1] == ':':
+                    return 'Windows'
+                else:
+                    return 'Linux'
+
+            return 'Windows'  # Default to Windows
+
+        except Exception as e:
+            self.logger.warning(f"Could not determine OS: {e}")
+            return 'Windows'
+
+    def _toggle_os(self, button):
+        """
+        Toggle between Windows and Linux paths in multishot_custom, PROJ_ROOT, and IMG_ROOT.
+
+        Args:
+            button: The button widget that was clicked
+        """
+        try:
+            import nuke
+            import json
+
+            root = nuke.root()
+
+            # Path mappings
+            win_to_linux = {
+                'V:/': '/mnt/igloo_swa_v/',
+                'V:\\': '/mnt/igloo_swa_v/',
+                'v:/': '/mnt/igloo_swa_v/',
+                'v:\\': '/mnt/igloo_swa_v/',
+                'W:/': '/mnt/igloo_swa_w/',
+                'W:\\': '/mnt/igloo_swa_w/',
+                'w:/': '/mnt/igloo_swa_w/',
+                'w:\\': '/mnt/igloo_swa_w/',
+                'T:/': '/mnt/ppr_dev_t/',
+                'T:\\': '/mnt/ppr_dev_t/',
+                't:/': '/mnt/ppr_dev_t/',
+                't:\\': '/mnt/ppr_dev_t/'
+            }
+
+            linux_to_win = {
+                '/mnt/igloo_swa_v/': 'V:/',
+                '/mnt/igloo_swa_w/': 'W:/',
+                '/mnt/ppr_dev_t/': 'T:/'
+            }
+
+            # Determine current OS
+            current_os = self._get_current_os()
+
+            print("\n" + "=" * 70)
+            print("MULTISHOT: Toggling OS paths")
+            print("=" * 70)
+            print(f"Current OS: {current_os}")
+
+            # Toggle multishot_custom JSON
+            if root.knob('multishot_custom'):
+                custom_json = root['multishot_custom'].value()
+                if custom_json:
+                    try:
+                        custom_vars = json.loads(custom_json)
+
+                        # Toggle PROJ_ROOT and IMG_ROOT in JSON
+                        for key in ['PROJ_ROOT', 'IMG_ROOT']:
+                            if key in custom_vars:
+                                original_value = custom_vars[key]
+                                new_value = original_value
+
+                                if current_os == 'Windows':
+                                    # Convert Windows to Linux
+                                    for win_path, linux_path in win_to_linux.items():
+                                        if win_path in new_value:
+                                            new_value = new_value.replace(win_path, linux_path).replace('\\', '/')
+                                            print(f"  {key} in JSON: {original_value} -> {new_value}")
+                                            break
+                                else:
+                                    # Convert Linux to Windows
+                                    for linux_path, win_path in linux_to_win.items():
+                                        if linux_path in new_value:
+                                            new_value = new_value.replace(linux_path, win_path)
+                                            print(f"  {key} in JSON: {original_value} -> {new_value}")
+                                            break
+
+                                custom_vars[key] = new_value
+
+                        # Update JSON knob
+                        new_json = json.dumps(custom_vars, separators=(',', ':'))
+                        root['multishot_custom'].setValue(new_json)
+                        print(f"Updated multishot_custom: {new_json}")
+
+                    except Exception as e:
+                        self.logger.error(f"Error parsing multishot_custom: {e}")
+
+            # Toggle individual PROJ_ROOT and IMG_ROOT knobs
+            for key in ['PROJ_ROOT', 'IMG_ROOT']:
+                if root.knob(key):
+                    original_value = root[key].value()
+                    new_value = original_value
+
+                    if current_os == 'Windows':
+                        # Convert Windows to Linux
+                        for win_path, linux_path in win_to_linux.items():
+                            if win_path in new_value:
+                                new_value = new_value.replace(win_path, linux_path).replace('\\', '/')
+                                print(f"  {key} knob: {original_value} -> {new_value}")
+                                break
+                    else:
+                        # Convert Linux to Windows
+                        for linux_path, win_path in linux_to_win.items():
+                            if linux_path in new_value:
+                                new_value = new_value.replace(linux_path, win_path)
+                                print(f"  {key} knob: {original_value} -> {new_value}")
+                                break
+
+                    root[key].setValue(new_value)
+
+            print("=" * 70 + "\n")
+
+            # Update button appearance
+            new_os = self._get_current_os()
+            if new_os == 'Windows':
+                button.setText("Win")
+                button.setStyleSheet("background-color: #4A90E2;")  # Blue
+            else:
+                button.setText("Linux")
+                button.setStyleSheet("background-color: #FF8C42;")  # Orange
+
+            QtWidgets.QMessageBox.information(
+                self,
+                "OS Toggle Complete",
+                f"Successfully toggled paths from {current_os} to {new_os}."
+            )
+
+        except Exception as e:
+            self.logger.error(f"Error toggling OS: {e}")
+            import traceback
+            traceback.print_exc()
+            QtWidgets.QMessageBox.critical(
+                self,
+                "Error",
+                f"Failed to toggle OS:\n{e}"
             )
 
     def _save_to_shot_directory(self, shot_data):
