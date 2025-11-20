@@ -651,9 +651,36 @@ if hasattr(write_node_module, '_node_instances'):
     def before_render(self):
         """
         Called before rendering starts.
-        Creates directories, validates output path, and saves metadata.
+        Creates directories, validates output path, saves metadata, and ensures correct format.
         """
         try:
+            import nuke
+
+            # CRITICAL: Ensure root format is set correctly before rendering
+            # This fixes the issue where Deadline path mapping resets format to 640x480
+            root_format = nuke.root()['format'].value()
+            current_width = root_format.width()
+            current_height = root_format.height()
+
+            self.logger.info(f"Before render - Current format: {current_width}x{current_height} ({root_format.name()})")
+
+            # If format is the default 640x480, try to restore from saved_format knob
+            if current_width == 640 and current_height == 480:
+                self.logger.warning("Format is default 640x480! Attempting to restore...")
+
+                if nuke.root().knob('saved_format'):
+                    saved_format_name = nuke.root()['saved_format'].value()
+                    self.logger.info(f"Found saved_format: {saved_format_name}")
+
+                    try:
+                        nuke.root()['format'].setValue(saved_format_name)
+                        new_format = nuke.root()['format'].value()
+                        self.logger.info(f"Restored format to: {new_format.width()}x{new_format.height()} ({new_format.name()})")
+                    except Exception as e:
+                        self.logger.error(f"Failed to restore format: {e}")
+                else:
+                    self.logger.error("No saved_format knob found! Render will use 640x480!")
+
             # Get current output path
             output_path = self.node['file'].value()
             if not output_path:

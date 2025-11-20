@@ -236,6 +236,9 @@ except Exception as e:
             root['onScriptLoad'].setValue(callback_code)
             self.logger.debug("Set onScriptLoad callback for batch mode variable initialization")
 
+            # Save current format for batch mode restoration
+            self._save_current_format(root)
+
             # Create custom variables knob if it doesn't exist
             if self.CUSTOM_KNOB not in root.knobs():
                 knob = nuke.String_Knob(self.CUSTOM_KNOB, 'Multishot Custom')
@@ -301,6 +304,32 @@ except Exception as e:
             self.logger.error(f"Error ensuring root variables in script: {e}")
 
 
+
+    def _save_current_format(self, root):
+        """
+        Save the current format name to a knob for batch mode restoration.
+
+        This is critical for Deadline rendering - when Deadline copies the script,
+        the format can be reset to 640x480. This knob allows us to restore it.
+        """
+        try:
+            import nuke
+
+            # Get current format
+            current_format = root['format'].value()
+            format_name = current_format.name()
+
+            # Create or update saved_format knob
+            if 'saved_format' not in root.knobs():
+                knob = nuke.String_Knob('saved_format', 'Saved Format')
+                # DON'T set INVISIBLE - Deadline strips invisible knobs!
+                root.addKnob(knob)
+
+            root['saved_format'].setValue(format_name)
+            self.logger.info(f"Saved format for batch mode: {format_name} ({current_format.width()}x{current_format.height()})")
+
+        except Exception as e:
+            self.logger.error(f"Error saving format: {e}")
 
     def _create_individual_root_knobs(self, root_variables: Dict[str, str]):
         """Create individual knobs for root variables so they can be accessed as [value root.VARIABLE_NAME]."""
