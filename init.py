@@ -116,138 +116,26 @@ def ensure_variables_for_batch_mode():
         else:
             print("DEBUG: multishot_context knob does NOT exist!")
 
-        # FIRST PRIORITY: Fix multishot_custom JSON (convert Windows paths to Linux)
-        # This must happen BEFORE creating individual knobs from JSON
-        import platform
-        path_mappings = {
-            'V:/': '/mnt/igloo_swa_v/',
-            'V:\\': '/mnt/igloo_swa_v/',
-            'v:/': '/mnt/igloo_swa_v/',
-            'v:\\': '/mnt/igloo_swa_v/',
-            'W:/': '/mnt/igloo_swa_w/',
-            'W:\\': '/mnt/igloo_swa_w/',
-            'w:/': '/mnt/igloo_swa_w/',
-            'w:\\': '/mnt/igloo_swa_w/',
-            'T:/': '/mnt/ppr_dev_t/',
-            'T:\\': '/mnt/ppr_dev_t/',
-            't:/': '/mnt/ppr_dev_t/',
-            't:\\': '/mnt/ppr_dev_t/'
-        }
-
+        # Script already has Linux paths (converted during submission)
+        # Just verify the knobs exist
         print("\n" + "=" * 80)
-        print("MULTISHOT: Converting Windows paths to Linux (FIRST PRIORITY)")
+        print("MULTISHOT: Verifying variables in batch mode")
         print("=" * 80)
 
-        # Fix multishot_custom JSON
-        if 'multishot_custom' in all_knobs:
-            custom_json = root['multishot_custom'].value()
-            print("Original multishot_custom: {}".format(custom_json))
-            if custom_json:
-                try:
-                    custom_vars = json.loads(custom_json)
-                    modified = False
-
-                    # Convert paths in PROJ_ROOT and IMG_ROOT
-                    for key in ['PROJ_ROOT', 'IMG_ROOT']:
-                        if key in custom_vars:
-                            original_value = custom_vars[key]
-                            new_value = original_value
-
-                            # Apply path mappings on Linux
-                            if platform.system() == 'Linux':
-                                for win_path, linux_path in path_mappings.items():
-                                    if win_path in new_value:
-                                        new_value = new_value.replace(win_path, linux_path).replace('\\', '/')
-                                        print("  {} in JSON: {} -> {}".format(key, original_value, new_value))
-                                        modified = True
-                                        break
-
-                            custom_vars[key] = new_value
-
-                    if modified:
-                        # Update the JSON knob with converted paths
-                        new_json = json.dumps(custom_vars, separators=(',', ':'))
-                        root['multishot_custom'].setValue(new_json)
-                        print("Updated multishot_custom: {}".format(new_json))
-                    else:
-                        print("No path conversion needed in multishot_custom")
-
-                except Exception as e:
-                    print("  ERROR parsing multishot_custom: {}".format(e))
-                    import traceback
-                    traceback.print_exc()
-
-        # Now create/update individual PROJ_ROOT and IMG_ROOT knobs from the (now fixed) JSON
-        if 'multishot_custom' in all_knobs:
-            custom_json = root['multishot_custom'].value()
-            if custom_json:
-                try:
-                    custom_vars = json.loads(custom_json)
-                    for key in ['PROJ_ROOT', 'IMG_ROOT']:
-                        if key in custom_vars:
-                            value = custom_vars[key]
-                            if key not in root.knobs():
-                                knob = nuke.String_Knob(key, key)
-                                root.addKnob(knob)
-                                print("  Created knob: {}".format(key))
-                            root[key].setValue(str(value))
-                            print("  Set {} = {}".format(key, value))
-                except Exception as e:
-                    print("  ERROR creating knobs from multishot_custom: {}".format(e))
-                    import traceback
-                    traceback.print_exc()
-
-        print("=" * 80 + "\n")
-
-        # Also update existing PROJ_ROOT and IMG_ROOT knobs if they were already in the script
-        # (in case they weren't created from JSON above)
-        print("\nDEBUG: Checking for existing PROJ_ROOT and IMG_ROOT knobs...")
         for key in ['PROJ_ROOT', 'IMG_ROOT']:
             if key in all_knobs:
-                # Knob exists - read its current value from the .nk file
-                current_value = root[key].value()
-                print("DEBUG: Found existing knob {} = {}".format(key, current_value))
-
-                # Replace Windows paths with Linux paths on Linux
-                final_value = str(current_value)
-                if platform.system() == 'Linux':
-                    for win_path, linux_path in path_mappings.items():
-                        if win_path in final_value:
-                            final_value = final_value.replace(win_path, linux_path).replace('\\', '/')
-                            print("  Replaced {} path: {} -> {}".format(key, current_value, final_value))
-                            break
-
-                # Update the knob value
-                root[key].setValue(final_value)
-                print("  Updated {} = {}".format(key, final_value))
+                value = root[key].value()
+                print("  {} = {}".format(key, value))
             else:
-                print("DEBUG: Knob {} does NOT exist - trying to create from JSON...".format(key))
-                if 'multishot_custom' in all_knobs:
-                    custom_json = root['multishot_custom'].value()
-                    if custom_json:
-                        try:
-                            custom_vars = json.loads(custom_json)
-                            if key in custom_vars:
-                                value = custom_vars[key]
+                print("  WARNING: {} knob not found!".format(key))
 
-                                # Create the knob
-                                knob = nuke.String_Knob(key, key)
-                                root.addKnob(knob)
-                                print("  Created knob: {}".format(key))
+        if 'multishot_custom' in all_knobs:
+            custom_json = root['multishot_custom'].value()
+            print("  multishot_custom = {}".format(custom_json))
+        else:
+            print("  WARNING: multishot_custom knob not found!")
 
-                                # Replace Windows paths with Linux paths
-                                final_value = str(value)
-                                if platform.system() == 'Linux':
-                                    for win_path, linux_path in path_mappings.items():
-                                        if win_path in final_value:
-                                            final_value = final_value.replace(win_path, linux_path).replace('\\', '/')
-                                            print("  Replaced {} path: {} -> {}".format(key, value, final_value))
-                                            break
-
-                                root[key].setValue(final_value)
-                                print("  Set {} = {}".format(key, final_value))
-                        except Exception as e:
-                            print("  ERROR parsing multishot_custom: {}".format(e))
+        print("=" * 80 + "\n")
 
         print("Multishot: Variables initialized in batch mode")
         print("=" * 80 + "\n")

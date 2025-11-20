@@ -110,6 +110,154 @@ def fix_read_node_frame_ranges_for_submission():
         return False
 
 
+def convert_paths_to_linux():
+    """
+    Convert Windows paths to Linux paths in multishot_custom JSON and individual knobs.
+
+    Returns:
+        dict: Backup of original values to restore later
+    """
+    try:
+        import nuke
+        import json
+
+        print("\n" + "=" * 70)
+        print("MULTISHOT: Converting Windows paths to Linux for submission")
+        print("=" * 70)
+
+        root = nuke.root()
+        backup = {}
+
+        # Path mappings (case-insensitive)
+        path_mappings = {
+            'T:/': '/mnt/ppr_dev_t/',
+            'T:\\': '/mnt/ppr_dev_t/',
+            't:/': '/mnt/ppr_dev_t/',
+            't:\\': '/mnt/ppr_dev_t/',
+            'V:/': '/mnt/igloo_swa_v/',
+            'V:\\': '/mnt/igloo_swa_v/',
+            'v:/': '/mnt/igloo_swa_v/',
+            'v:\\': '/mnt/igloo_swa_v/',
+            'W:/': '/mnt/igloo_swa_w/',
+            'W:\\': '/mnt/igloo_swa_w/',
+            'w:/': '/mnt/igloo_swa_w/',
+            'w:\\': '/mnt/igloo_swa_w/'
+        }
+
+        # 1. Convert multishot_custom JSON
+        if root.knob('multishot_custom'):
+            custom_json = root['multishot_custom'].value()
+            backup['multishot_custom'] = custom_json
+            print("  Original multishot_custom: {}".format(custom_json))
+
+            if custom_json:
+                try:
+                    custom_vars = json.loads(custom_json)
+                    modified = False
+
+                    # Convert paths in PROJ_ROOT and IMG_ROOT
+                    for key in ['PROJ_ROOT', 'IMG_ROOT']:
+                        if key in custom_vars:
+                            original_value = custom_vars[key]
+                            new_value = original_value
+
+                            # Apply path mappings
+                            for win_path, linux_path in path_mappings.items():
+                                if win_path in new_value:
+                                    new_value = new_value.replace(win_path, linux_path).replace('\\', '/')
+                                    print("    {} in JSON: {} -> {}".format(key, original_value, new_value))
+                                    modified = True
+                                    break
+
+                            custom_vars[key] = new_value
+
+                    if modified:
+                        # Update the JSON knob with converted paths
+                        new_json = json.dumps(custom_vars, separators=(',', ':'))
+                        root['multishot_custom'].setValue(new_json)
+                        print("  Updated multishot_custom: {}".format(new_json))
+
+                except Exception as e:
+                    print("  ERROR parsing multishot_custom: {}".format(e))
+                    import traceback
+                    traceback.print_exc()
+
+        # 2. Update individual PROJ_ROOT and IMG_ROOT knobs from the converted JSON
+        if root.knob('multishot_custom'):
+            custom_json = root['multishot_custom'].value()
+            if custom_json:
+                try:
+                    custom_vars = json.loads(custom_json)
+                    for key in ['PROJ_ROOT', 'IMG_ROOT']:
+                        if key in custom_vars:
+                            value = custom_vars[key]
+
+                            # Backup original value
+                            if root.knob(key):
+                                backup[key] = root[key].value()
+
+                            # Create knob if it doesn't exist
+                            if not root.knob(key):
+                                knob = nuke.String_Knob(key, key)
+                                root.addKnob(knob)
+                                print("  Created knob: {}".format(key))
+
+                            # Set the Linux path
+                            root[key].setValue(str(value))
+                            print("  Set {} = {}".format(key, value))
+
+                except Exception as e:
+                    print("  ERROR updating knobs: {}".format(e))
+                    import traceback
+                    traceback.print_exc()
+
+        print("=" * 70 + "\n")
+        return backup
+
+    except Exception as e:
+        print("ERROR: Could not convert paths: {}".format(e))
+        import traceback
+        traceback.print_exc()
+        print("=" * 70 + "\n")
+        return {}
+
+
+def restore_windows_paths(backup):
+    """
+    Restore Windows paths from backup after submission.
+
+    Args:
+        backup (dict): Backup of original values
+    """
+    try:
+        import nuke
+
+        print("\n" + "=" * 70)
+        print("MULTISHOT: Restoring Windows paths after submission")
+        print("=" * 70)
+
+        root = nuke.root()
+
+        # Restore multishot_custom JSON
+        if 'multishot_custom' in backup and root.knob('multishot_custom'):
+            root['multishot_custom'].setValue(backup['multishot_custom'])
+            print("  Restored multishot_custom: {}".format(backup['multishot_custom']))
+
+        # Restore individual knobs
+        for key in ['PROJ_ROOT', 'IMG_ROOT']:
+            if key in backup and root.knob(key):
+                root[key].setValue(backup[key])
+                print("  Restored {} = {}".format(key, backup[key]))
+
+        print("=" * 70 + "\n")
+
+    except Exception as e:
+        print("ERROR: Could not restore paths: {}".format(e))
+        import traceback
+        traceback.print_exc()
+        print("=" * 70 + "\n")
+
+
 def ensure_variables_before_submission():
     """
     Ensure all multishot variables are properly set before submission.
@@ -458,29 +606,34 @@ def submit_to_deadline():
             # STEP 1: Ensure all variables are embedded in the script
             ensure_variables_before_submission()
 
-            # STEP 2: Fix Read node frame ranges
+            # STEP 2: Convert Windows paths to Linux paths
+            backup = convert_paths_to_linux()
+
+            # STEP 3: Fix Read node frame ranges
             # ❌ DISABLED: This was forcing expressions even when user wants static values!
             # If Read nodes have static frame ranges, we should NOT overwrite them.
             # fix_read_node_frame_ranges_for_submission()
 
-            # STEP 3: Delete Viewer nodes (they cause issues in batch mode)
+            # STEP 4: Delete Viewer nodes (they cause issues in batch mode)
             delete_viewer_nodes_for_batch_mode()
 
-            # STEP 4: SAVE THE SCRIPT to write variables to .nk file!
-            # NOTE: Script is saved with Windows paths - conversion happens on render node
+            # STEP 5: SAVE THE SCRIPT with Linux paths
             print("\n" + "=" * 70)
-            print("MULTISHOT: Saving script to embed variables in .nk file")
+            print("MULTISHOT: Saving script with Linux paths for farm")
             print("=" * 70)
             nuke.scriptSave()
             print("Script saved: {}".format(nuke.root().name()))
             print("=" * 70 + "\n")
 
-            # STEP 5: Patch the submission to add our environment variables
+            # STEP 6: Patch the submission to add our environment variables
             _patch_deadline_submission()
 
-            # STEP 6: Open submission dialog
+            # STEP 7: Open submission dialog
             print("Opening Deadline submission dialog...")
             SubmitNukeToDeadline.SubmitToDeadline()
+
+            # STEP 8: Restore Windows paths after submission
+            restore_windows_paths(backup)
 
         except ImportError as e:
             error_msg = (
