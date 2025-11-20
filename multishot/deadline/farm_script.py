@@ -362,7 +362,9 @@ print("=" * 70)
 '''
                     if node.knob('beforeRender'):
                         node['beforeRender'].setValue(before_render_code)
-                        self.logger.debug(f"Added beforeRender callback to Write '{node.name()}'")
+                        self.logger.info(f"✓ Added beforeRender callback to Write '{node.name()}' ({len(before_render_code)} chars)")
+                    else:
+                        self.logger.warning(f"✗ Write node '{node.name()}' has no beforeRender knob!")
 
                     write_count += 1
                     self.logger.debug(f"Baked Write node: {node.name()}")
