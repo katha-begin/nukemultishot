@@ -207,6 +207,8 @@ try:
         print("Multishot onScriptLoad: multishot_context knob NOT FOUND!")
 
     # Ensure individual knobs exist for custom variables (PROJ_ROOT, IMG_ROOT)
+    # NOTE: We do NOT modify the JSON - it stays as-is (Windows paths)
+    # We only replace paths when creating the individual knobs
     if nuke.root().knob('multishot_custom'):
         custom_json = nuke.root()['multishot_custom'].value()
         print("Multishot onScriptLoad: custom_json = " + repr(custom_json))
@@ -215,25 +217,24 @@ try:
                 custom_vars = json.loads(custom_json)
                 print("Multishot onScriptLoad: Parsed custom_vars = " + str(custom_vars))
 
-                # On Linux, replace Windows paths in the custom_vars dictionary
-                if platform.system() == 'Linux':
-                    for key in ['PROJ_ROOT', 'IMG_ROOT']:
-                        if key in custom_vars:
-                            original_value = custom_vars[key]
-                            for win_path, linux_path in path_mappings.items():
-                                if win_path in str(original_value):
-                                    custom_vars[key] = str(original_value).replace(win_path, linux_path).replace('\\\\', '/')
-                                    print("Multishot onScriptLoad: Replaced {} in custom_vars: {} -> {}".format(key, original_value, custom_vars[key]))
-                                    break
-
                 for key, value in custom_vars.items():
                     if key in ['PROJ_ROOT', 'IMG_ROOT']:
                         if key not in nuke.root().knobs():
                             knob = nuke.String_Knob(key, key)
                             # DON'T set INVISIBLE - Deadline strips invisible knobs!
                             nuke.root().addKnob(knob)
-                        nuke.root()[key].setValue(str(value))
-                        print("Multishot onScriptLoad: Set " + key + " = " + str(value))
+
+                        # Replace Windows paths with OS-appropriate paths when setting individual knobs
+                        final_value = str(value)
+                        if platform.system() == 'Linux':
+                            for win_path, linux_path in path_mappings.items():
+                                if win_path in final_value:
+                                    final_value = final_value.replace(win_path, linux_path).replace('\\\\', '/')
+                                    print("Multishot onScriptLoad: Replaced {} path: {} -> {}".format(key, value, final_value))
+                                    break
+
+                        nuke.root()[key].setValue(final_value)
+                        print("Multishot onScriptLoad: Set " + key + " = " + final_value)
             except Exception as e:
                 print("Multishot onScriptLoad: ERROR parsing custom JSON: " + str(e))
     else:
@@ -347,6 +348,7 @@ except Exception as e:
         """Create individual knobs for root variables so they can be accessed as [value root.VARIABLE_NAME]."""
         try:
             import nuke
+            import platform
             root = nuke.root()
 
             # Ensure Multishot tab exists
@@ -355,20 +357,38 @@ except Exception as e:
                 root.addKnob(tab)
                 self.logger.debug("Created Multishot tab")
 
+            # Path mappings for OS detection
+            path_mappings = {
+                'V:/': '/mnt/igloo_swa_v/',
+                'V:\\': '/mnt/igloo_swa_v/',
+                'W:/': '/mnt/igloo_swa_w/',
+                'W:\\': '/mnt/igloo_swa_w/',
+                'T:/': '/mnt/ppr_dev_t/',
+                'T:\\': '/mnt/ppr_dev_t/'
+            }
+
             for key, value in root_variables.items():
+                # Replace Windows paths with OS-appropriate paths for PROJ_ROOT and IMG_ROOT
+                final_value = str(value)
+                if key in ['PROJ_ROOT', 'IMG_ROOT'] and platform.system() == 'Linux':
+                    for win_path, linux_path in path_mappings.items():
+                        if win_path in final_value:
+                            final_value = final_value.replace(win_path, linux_path).replace('\\', '/')
+                            self.logger.info(f"Replaced {key} path for Linux: {value} -> {final_value}")
+                            break
+
                 # Check if knob already exists
                 if key not in root.knobs():
                     # Create string knob for the variable
                     knob = nuke.String_Knob(key, key)
                     # DON'T set INVISIBLE - Deadline strips invisible knobs!
                     root.addKnob(knob)
-                    # Set initial value - keep Windows paths, let Deadline do the mapping
-                    root[key].setValue(value)
-                    self.logger.info(f"Created individual knob: {key} = {value}")
+                    root[key].setValue(final_value)
+                    self.logger.info(f"Created individual knob: {key} = {final_value}")
                 else:
-                    # Knob already exists - just log it
-                    existing_value = root[key].value()
-                    self.logger.debug(f"Knob {key} already exists with value: {existing_value}")
+                    # Knob already exists - update its value with OS-appropriate path
+                    root[key].setValue(final_value)
+                    self.logger.debug(f"Updated knob {key} = {final_value}")
 
         except Exception as e:
             self.logger.error(f"Error creating individual root knobs: {e}")

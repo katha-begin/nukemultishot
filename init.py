@@ -102,6 +102,8 @@ def ensure_variables_for_batch_mode():
             print("DEBUG: multishot_context knob does NOT exist!")
 
         # Create knobs from multishot_custom
+        # NOTE: We do NOT modify the JSON - it stays as-is (Windows paths)
+        # We only replace paths when creating the individual knobs
         if 'multishot_custom' in all_knobs:
             custom_json = root['multishot_custom'].value()
             print("DEBUG: custom_json value: {}".format(repr(custom_json)))
@@ -110,26 +112,16 @@ def ensure_variables_for_batch_mode():
                     custom_vars = json.loads(custom_json)
                     print("DEBUG: Parsed custom_vars: {}".format(custom_vars))
 
-                    # CRITICAL: On Linux, replace Windows paths BEFORE setting knobs
+                    # Detect OS for path mapping
                     import platform
-                    if platform.system() == 'Linux':
-                        print("DEBUG: Linux detected - replacing Windows paths in custom_vars...")
-                        path_mappings = {
-                            'V:/': '/mnt/igloo_swa_v/',
-                            'V:\\': '/mnt/igloo_swa_v/',
-                            'W:/': '/mnt/igloo_swa_w/',
-                            'W:\\': '/mnt/igloo_swa_w/',
-                            'T:/': '/mnt/ppr_dev_t/',
-                            'T:\\': '/mnt/ppr_dev_t/'
-                        }
-                        for key in ['PROJ_ROOT', 'IMG_ROOT']:
-                            if key in custom_vars:
-                                original_value = custom_vars[key]
-                                for win_path, linux_path in path_mappings.items():
-                                    if win_path in str(original_value):
-                                        custom_vars[key] = str(original_value).replace(win_path, linux_path).replace('\\', '/')
-                                        print("  Replaced {} in custom_vars: {} -> {}".format(key, original_value, custom_vars[key]))
-                                        break
+                    path_mappings = {
+                        'V:/': '/mnt/igloo_swa_v/',
+                        'V:\\': '/mnt/igloo_swa_v/',
+                        'W:/': '/mnt/igloo_swa_w/',
+                        'W:\\': '/mnt/igloo_swa_w/',
+                        'T:/': '/mnt/ppr_dev_t/',
+                        'T:\\': '/mnt/ppr_dev_t/'
+                    }
 
                     for key, value in custom_vars.items():
                         if key in ['PROJ_ROOT', 'IMG_ROOT']:
@@ -138,8 +130,18 @@ def ensure_variables_for_batch_mode():
                                 # DON'T set INVISIBLE - Deadline strips invisible knobs!
                                 root.addKnob(knob)
                                 print("  Created knob: {}".format(key))
-                            root[key].setValue(str(value))
-                            print("  Set {} = {}".format(key, value))
+
+                            # Replace Windows paths with OS-appropriate paths when setting individual knobs
+                            final_value = str(value)
+                            if platform.system() == 'Linux':
+                                for win_path, linux_path in path_mappings.items():
+                                    if win_path in final_value:
+                                        final_value = final_value.replace(win_path, linux_path).replace('\\', '/')
+                                        print("  Replaced {} path: {} -> {}".format(key, value, final_value))
+                                        break
+
+                            root[key].setValue(final_value)
+                            print("  Set {} = {}".format(key, final_value))
                 except Exception as e:
                     print("  ERROR parsing multishot_custom: {}".format(e))
                     import traceback
