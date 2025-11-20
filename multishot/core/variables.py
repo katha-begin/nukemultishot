@@ -463,7 +463,7 @@ except Exception as e:
                 if key not in root.knobs():
                     # Create string knob for the variable
                     knob = nuke.String_Knob(key, key)
-                    knob.setFlag(nuke.INVISIBLE)  # Hide from UI
+                    # DON'T set INVISIBLE - Deadline strips invisible knobs!
                     root.addKnob(knob)
                     self.logger.debug(f"Created individual context knob: {key}")
 
