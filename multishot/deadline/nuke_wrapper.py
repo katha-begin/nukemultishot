@@ -314,15 +314,11 @@ def main():
             script_path = arg
             break
 
-    # CRITICAL: Fix script BEFORE launching Nuke
-    # Order matters:
-    # 1. Fix multishot paths (multishot_custom, PROJ_ROOT, IMG_ROOT) - FIRST PRIORITY
-    # 2. Set OCIO environment variable
-    # 3. Fix viewer process settings
+    # CRITICAL: Set OCIO environment variable and fix viewer process BEFORE launching Nuke
+    # Path conversion happens INSIDE Nuke via init.py (not here)
     if script_path:
-        fix_multishot_paths_in_script(script_path)  # FIRST: Convert Windows paths to Linux
-        set_ocio_from_script(script_path)           # SECOND: Set OCIO env var
-        fix_viewer_process_in_script(script_path)   # THIRD: Fix viewer settings
+        set_ocio_from_script(script_path)           # FIRST: Set OCIO env var
+        fix_viewer_process_in_script(script_path)   # SECOND: Fix viewer settings
 
     # Launch Nuke with the original arguments
     cmd = [nuke_exe] + nuke_args
