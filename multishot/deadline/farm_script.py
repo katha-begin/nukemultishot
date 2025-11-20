@@ -296,6 +296,30 @@ class FarmScriptManager:
                         node['format'].setValue(root_format.name())
                         self.logger.info(f"Set format on Write '{node.name()}': {root_format.name()} ({root_format.width()}x{root_format.height()})")
 
+                    # Add beforeRender callback to set and print format
+                    # This ensures format is correct at render time and logs it for debugging
+                    before_render_code = '''
+import nuke
+node = nuke.thisNode()
+root_format = nuke.root()['format'].value()
+print("=" * 70)
+print("BEFORE RENDER - Write node: {}".format(node.name()))
+print("Root format: {} ({}x{})".format(root_format.name(), root_format.width(), root_format.height()))
+
+# Set format on Write node from root format
+if node.knob('format'):
+    node['format'].setValue(root_format.name())
+    write_format = node['format'].value()
+    print("Write node format set to: {} ({}x{})".format(write_format.name(), write_format.width(), write_format.height()))
+else:
+    print("Write node has no format knob - will use root format")
+
+print("=" * 70)
+'''
+                    if node.knob('beforeRender'):
+                        node['beforeRender'].setValue(before_render_code)
+                        self.logger.debug(f"Added beforeRender callback to Write '{node.name()}'")
+
                     write_count += 1
                     self.logger.debug(f"Baked Write node: {node.name()}")
 
