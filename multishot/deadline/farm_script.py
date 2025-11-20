@@ -289,30 +289,65 @@ class FarmScriptManager:
                         if file_path != linux_path:
                             self.logger.debug(f"Converted path: {file_path} -> {linux_path}")
 
-                    # Add beforeRender callback to set root format and print result
-                    # This ensures format is correct at render time and logs it for debugging
+                    # Add beforeRender callback to print all root knobs and set format
                     before_render_code = '''
 import nuke
+
+print("=" * 70)
+print("BEFORE RENDER - Write node: {}".format(nuke.thisNode().name()))
+print("=" * 70)
+
+# Print ALL root knobs
+print("\\nALL ROOT KNOBS:")
+print("-" * 70)
+root = nuke.root()
+for knob_name in sorted(root.knobs().keys()):
+    try:
+        knob = root[knob_name]
+        knob_class = knob.Class()
+
+        # Skip some internal knobs
+        if knob_name.startswith('_'):
+            continue
+
+        # Get knob value based on type
+        if knob_class == 'Format_Knob':
+            fmt = knob.value()
+            value = "{} ({}x{})".format(fmt.name(), fmt.width(), fmt.height())
+        elif knob_class in ['String_Knob', 'File_Knob', 'Text_Knob']:
+            value = knob.value()
+            if len(str(value)) > 100:
+                value = str(value)[:100] + "..."
+        elif knob_class in ['Int_Knob', 'Double_Knob', 'Boolean_Knob']:
+            value = knob.value()
+        else:
+            value = "[{}]".format(knob_class)
+
+        print("  {}: {} = {}".format(knob_name, knob_class, value))
+    except Exception as e:
+        print("  {}: ERROR - {}".format(knob_name, e))
+
+print("-" * 70)
 
 # Get current root format
 root_format = nuke.root()['format'].value()
 current_width = root_format.width()
 current_height = root_format.height()
 
-print("=" * 70)
-print("BEFORE RENDER - Write node: {}".format(nuke.thisNode().name()))
-print("Current root format: {} ({}x{})".format(root_format.name(), current_width, current_height))
+print("\\nCURRENT ROOT FORMAT:")
+print("  Name: {}".format(root_format.name()))
+print("  Resolution: {}x{}".format(current_width, current_height))
 
 # If format is 640x480, try to restore from saved_format
 if current_width == 640 and current_height == 480:
-    print("WARNING: Root format is 640x480 (default)!")
+    print("\\nWARNING: Root format is 640x480 (default)!")
     if nuke.root().knob('saved_format'):
         saved_format_name = nuke.root()['saved_format'].value()
-        print("Found saved_format: {}".format(saved_format_name))
+        print("Found saved_format knob: {}".format(saved_format_name))
         try:
             nuke.root()['format'].setValue(saved_format_name)
             new_format = nuke.root()['format'].value()
-            print("Restored root format to: {} ({}x{})".format(new_format.name(), new_format.width(), new_format.height()))
+            print("SUCCESS: Restored root format to: {} ({}x{})".format(new_format.name(), new_format.width(), new_format.height()))
         except Exception as e:
             print("ERROR: Failed to restore format: {}".format(e))
     else:
@@ -320,9 +355,9 @@ if current_width == 640 and current_height == 480:
 else:
     print("Root format is correct (not 640x480)")
 
-# Print final format that will be used for rendering
+# Print final format
 final_format = nuke.root()['format'].value()
-print("Final render format: {} ({}x{})".format(final_format.name(), final_format.width(), final_format.height()))
+print("\\nFINAL RENDER FORMAT: {} ({}x{})".format(final_format.name(), final_format.width(), final_format.height()))
 print("=" * 70)
 '''
                     if node.knob('beforeRender'):
