@@ -109,6 +109,28 @@ def ensure_variables_for_batch_mode():
                 try:
                     custom_vars = json.loads(custom_json)
                     print("DEBUG: Parsed custom_vars: {}".format(custom_vars))
+
+                    # CRITICAL: On Linux, replace Windows paths BEFORE setting knobs
+                    import platform
+                    if platform.system() == 'Linux':
+                        print("DEBUG: Linux detected - replacing Windows paths in custom_vars...")
+                        path_mappings = {
+                            'V:/': '/mnt/igloo_swa_v/',
+                            'V:\\': '/mnt/igloo_swa_v/',
+                            'W:/': '/mnt/igloo_swa_w/',
+                            'W:\\': '/mnt/igloo_swa_w/',
+                            'T:/': '/mnt/ppr_dev_t/',
+                            'T:\\': '/mnt/ppr_dev_t/'
+                        }
+                        for key in ['PROJ_ROOT', 'IMG_ROOT']:
+                            if key in custom_vars:
+                                original_value = custom_vars[key]
+                                for win_path, linux_path in path_mappings.items():
+                                    if win_path in str(original_value):
+                                        custom_vars[key] = str(original_value).replace(win_path, linux_path).replace('\\', '/')
+                                        print("  Replaced {} in custom_vars: {} -> {}".format(key, original_value, custom_vars[key]))
+                                        break
+
                     for key, value in custom_vars.items():
                         if key in ['PROJ_ROOT', 'IMG_ROOT']:
                             if key not in root.knobs():
