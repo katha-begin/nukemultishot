@@ -258,87 +258,6 @@ def restore_windows_paths(backup):
         print("=" * 70 + "\n")
 
 
-def save_farm_script():
-    """
-    Save a separate farm script with Linux paths.
-
-    Path format: {root}/{project}/all/scene/{ep}/{seq}/{shot}/comp/farm/{filename}.nk
-
-    Returns:
-        str: Path to farm script, or None if failed
-    """
-    try:
-        import nuke
-        import json
-
-        print("\n" + "=" * 70)
-        print("MULTISHOT: Saving farm script with Linux paths")
-        print("=" * 70)
-
-        root = nuke.root()
-
-        # Get context variables
-        context_vars = {}
-        for key in ['project', 'ep', 'seq', 'shot']:
-            if root.knob(key):
-                context_vars[key] = root[key].value()
-            else:
-                print("  ERROR: Missing context variable: {}".format(key))
-                return None
-
-        # Get PROJ_ROOT
-        if not root.knob('PROJ_ROOT'):
-            print("  ERROR: Missing PROJ_ROOT knob")
-            return None
-        proj_root = root['PROJ_ROOT'].value()
-
-        # Get original script name
-        original_script = nuke.root().name()
-        if original_script == 'Root' or not original_script:
-            print("  ERROR: Script not saved")
-            return None
-
-        # Extract filename without path
-        import os
-        filename = os.path.basename(original_script)
-
-        # Build farm script path
-        # Format: {root}/{project}/all/scene/{ep}/{seq}/{shot}/comp/farm/{filename}.nk
-        farm_dir = os.path.join(
-            proj_root,
-            context_vars['project'],
-            'all',
-            'scene',
-            context_vars['ep'],
-            context_vars['seq'],
-            context_vars['shot'],
-            'comp',
-            'farm'
-        )
-
-        # Create farm directory if it doesn't exist
-        if not os.path.exists(farm_dir):
-            os.makedirs(farm_dir)
-            print("  Created farm directory: {}".format(farm_dir))
-
-        # Farm script path
-        farm_script_path = os.path.join(farm_dir, filename)
-
-        # Save script to farm location
-        nuke.scriptSaveAs(farm_script_path, overwrite=1)
-        print("  Farm script saved: {}".format(farm_script_path))
-        print("=" * 70 + "\n")
-
-        return farm_script_path
-
-    except Exception as e:
-        print("ERROR: Could not save farm script: {}".format(e))
-        import traceback
-        traceback.print_exc()
-        print("=" * 70 + "\n")
-        return None
-
-
 def ensure_variables_before_submission():
     """
     Ensure all multishot variables are properly set before submission.
@@ -472,16 +391,12 @@ def get_environment_variables():
     return env_vars
 
 
-def _patch_deadline_submission(farm_script_path):
+def _patch_deadline_submission():
     """
-    Monkey-patch the Deadline submission to inject environment variables and use farm script.
+    Monkey-patch the Deadline submission to inject environment variables into the job info file.
 
-    This patches the CallDeadlineCommand function to intercept job submission and:
-    1. Add environment variables to the job info file
-    2. Replace the script path with the farm script path
-
-    Args:
-        farm_script_path (str): Path to the farm script with Linux paths
+    This patches the CallDeadlineCommand function to intercept job submission and add
+    environment variables to the job info file before submission.
 
     Reference: https://docs.thinkboxsoftware.com/products/deadline/10.4/1_User%20Manual/manual/environment.html
     """
@@ -494,10 +409,10 @@ def _patch_deadline_submission(farm_script_path):
 
         def patched_call_deadline_command(args, hideWindow=True):
             """
-            Patched CallDeadlineCommand that adds environment variables and uses farm script.
+            Patched CallDeadlineCommand that adds environment variables to job info files.
 
             This intercepts the deadlinecommand call and modifies the job info file
-            to include required environment variables and use the farm script path.
+            to include required environment variables.
 
             Note: CallDeadlineCommand signature is (args, hideWindow=True)
             The parameter uses camelCase, not snake_case!
@@ -517,17 +432,7 @@ def _patch_deadline_submission(farm_script_path):
                     try:
                         # Read existing job info
                         with open(job_info_file, 'r') as f:
-                            job_info_lines = f.readlines()
-
-                        # Replace SceneFile path with farm script path
-                        for i, line in enumerate(job_info_lines):
-                            if line.startswith('SceneFile='):
-                                original_path = line.split('=', 1)[1].strip()
-                                job_info_lines[i] = 'SceneFile={}\n'.format(farm_script_path)
-                                print("  Replaced SceneFile:")
-                                print("    Original: {}".format(original_path))
-                                print("    Farm:     {}".format(farm_script_path))
-                                break
+                            job_info_content = f.read()
 
                         # Get environment variables to add
                         env_vars = get_environment_variables()
@@ -536,19 +441,20 @@ def _patch_deadline_submission(farm_script_path):
                         env_lines = []
                         env_index = 0
                         for key, value in env_vars.items():
-                            env_line = "EnvironmentKeyValue{}={}={}\n".format(env_index, key, value)
+                            env_line = "EnvironmentKeyValue{}={}={}".format(env_index, key, value)
                             env_lines.append(env_line)
                             print("  Adding: {} = {}".format(key, value))
                             env_index += 1
 
                         # Add UseJobEnvironmentOnly=false to merge with worker environment
-                        env_lines.append("UseJobEnvironmentOnly=false\n")
+                        env_lines.append("UseJobEnvironmentOnly=false")
                         print("  Set: UseJobEnvironmentOnly = false (merge with worker env)")
 
                         # Write back to file
-                        with open(job_info_file, 'w') as f:
-                            f.writelines(job_info_lines)
-                            f.writelines(env_lines)
+                        with open(job_info_file, 'a') as f:
+                            f.write('\n')
+                            f.write('\n'.join(env_lines))
+                            f.write('\n')
 
                         print("=" * 70 + "\n")
 
@@ -700,40 +606,34 @@ def submit_to_deadline():
             # STEP 1: Ensure all variables are embedded in the script
             ensure_variables_before_submission()
 
-            # STEP 2: Save original script name
-            original_script = nuke.root().name()
-
-            # STEP 3: Convert Windows paths to Linux paths
+            # STEP 2: Convert Windows paths to Linux paths
             backup = convert_paths_to_linux()
 
-            # STEP 4: Fix Read node frame ranges
+            # STEP 3: Fix Read node frame ranges
             # ❌ DISABLED: This was forcing expressions even when user wants static values!
             # If Read nodes have static frame ranges, we should NOT overwrite them.
             # fix_read_node_frame_ranges_for_submission()
 
-            # STEP 5: Delete Viewer nodes (they cause issues in batch mode)
+            # STEP 4: Delete Viewer nodes (they cause issues in batch mode)
             delete_viewer_nodes_for_batch_mode()
 
-            # STEP 6: Save farm script with Linux paths
-            farm_script_path = save_farm_script()
-            if not farm_script_path:
-                nuke.message("Failed to save farm script!")
-                restore_windows_paths(backup)
-                return
+            # STEP 5: SAVE THE SCRIPT with Linux paths
+            print("\n" + "=" * 70)
+            print("MULTISHOT: Saving script with Linux paths for farm")
+            print("=" * 70)
+            nuke.scriptSave()
+            print("Script saved: {}".format(nuke.root().name()))
+            print("=" * 70 + "\n")
 
-            # STEP 7: Restore original script (so we're back to the local script)
-            nuke.scriptOpen(original_script)
-            print("Restored original script: {}".format(original_script))
+            # STEP 6: Patch the submission to add our environment variables
+            _patch_deadline_submission()
 
-            # STEP 8: Restore Windows paths (so local script keeps Windows paths)
-            restore_windows_paths(backup)
-
-            # STEP 9: Patch the submission to add our environment variables and use farm script
-            _patch_deadline_submission(farm_script_path)
-
-            # STEP 10: Open submission dialog
+            # STEP 7: Open submission dialog
             print("Opening Deadline submission dialog...")
             SubmitNukeToDeadline.SubmitToDeadline()
+
+            # STEP 8: Restore Windows paths after submission
+            restore_windows_paths(backup)
 
         except ImportError as e:
             error_msg = (
