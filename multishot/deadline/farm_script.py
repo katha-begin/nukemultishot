@@ -289,31 +289,40 @@ class FarmScriptManager:
                         if file_path != linux_path:
                             self.logger.debug(f"Converted path: {file_path} -> {linux_path}")
 
-                    # CRITICAL: Set format on Write node to prevent 640x480 default
-                    # This ensures the correct resolution even if onScriptLoad callback fails
-                    if node.knob('format'):
-                        root_format = nuke.root()['format'].value()
-                        node['format'].setValue(root_format.name())
-                        self.logger.info(f"Set format on Write '{node.name()}': {root_format.name()} ({root_format.width()}x{root_format.height()})")
-
-                    # Add beforeRender callback to set and print format
+                    # Add beforeRender callback to set root format and print result
                     # This ensures format is correct at render time and logs it for debugging
                     before_render_code = '''
 import nuke
-node = nuke.thisNode()
+
+# Get current root format
 root_format = nuke.root()['format'].value()
+current_width = root_format.width()
+current_height = root_format.height()
+
 print("=" * 70)
-print("BEFORE RENDER - Write node: {}".format(node.name()))
-print("Root format: {} ({}x{})".format(root_format.name(), root_format.width(), root_format.height()))
+print("BEFORE RENDER - Write node: {}".format(nuke.thisNode().name()))
+print("Current root format: {} ({}x{})".format(root_format.name(), current_width, current_height))
 
-# Set format on Write node from root format
-if node.knob('format'):
-    node['format'].setValue(root_format.name())
-    write_format = node['format'].value()
-    print("Write node format set to: {} ({}x{})".format(write_format.name(), write_format.width(), write_format.height()))
+# If format is 640x480, try to restore from saved_format
+if current_width == 640 and current_height == 480:
+    print("WARNING: Root format is 640x480 (default)!")
+    if nuke.root().knob('saved_format'):
+        saved_format_name = nuke.root()['saved_format'].value()
+        print("Found saved_format: {}".format(saved_format_name))
+        try:
+            nuke.root()['format'].setValue(saved_format_name)
+            new_format = nuke.root()['format'].value()
+            print("Restored root format to: {} ({}x{})".format(new_format.name(), new_format.width(), new_format.height()))
+        except Exception as e:
+            print("ERROR: Failed to restore format: {}".format(e))
+    else:
+        print("ERROR: No saved_format knob found!")
 else:
-    print("Write node has no format knob - will use root format")
+    print("Root format is correct (not 640x480)")
 
+# Print final format that will be used for rendering
+final_format = nuke.root()['format'].value()
+print("Final render format: {} ({}x{})".format(final_format.name(), final_format.width(), final_format.height()))
 print("=" * 70)
 '''
                     if node.knob('beforeRender'):
