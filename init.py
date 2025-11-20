@@ -8,6 +8,21 @@ directory is in the NUKE_PATH.
 import os
 import sys
 
+# DEBUG: Print OCIO environment variable immediately when init.py loads
+print("\n" + "=" * 80)
+print("MULTISHOT DEBUG: Checking OCIO environment variable")
+print("=" * 80)
+ocio_env = os.environ.get('OCIO', 'NOT SET')
+print("OCIO environment variable: {}".format(ocio_env))
+if ocio_env != 'NOT SET':
+    if os.path.exists(ocio_env):
+        print("  -> OCIO config file EXISTS: {}".format(ocio_env))
+    else:
+        print("  -> ERROR: OCIO config file DOES NOT EXIST: {}".format(ocio_env))
+else:
+    print("  -> WARNING: OCIO environment variable is NOT SET!")
+print("=" * 80 + "\n")
+
 def ensure_variables_for_batch_mode():
     """
     DEBUG: Just print all root knobs to see what's in the script.

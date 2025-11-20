@@ -201,6 +201,7 @@ def get_environment_variables():
         if ocio_knob and ocio_knob.value():
             # Convert Windows path to Linux path for render nodes
             ocio_path = ocio_knob.value()
+            print("DEBUG: Original OCIO path from script: {}".format(ocio_path))
 
             # Apply path mapping for all drive letters (case-insensitive)
             # Check both uppercase and lowercase drive letters
@@ -222,17 +223,22 @@ def get_environment_variables():
             for win_path, linux_path in path_mappings.items():
                 if ocio_path.startswith(win_path):
                     ocio_path = ocio_path.replace(win_path, linux_path).replace('\\', '/')
+                    print("DEBUG: Converted OCIO path to Linux: {}".format(ocio_path))
                     break
 
             env_vars['OCIO'] = ocio_path
+            print("DEBUG: Setting OCIO environment variable to: {}".format(ocio_path))
         else:
             # Use default OCIO path (Linux path for render nodes)
             ocio_path_linux = '/mnt/ppr_dev_t/pipeline/ocio/aces_2.0/studio-config-v1.0.0_aces-v1.3_ocio-v2.0.ocio'
             env_vars['OCIO'] = ocio_path_linux
-    except:
+            print("DEBUG: No customOCIOConfigPath in script, using default: {}".format(ocio_path_linux))
+    except Exception as e:
         # Fallback to default OCIO path
         ocio_path_linux = '/mnt/ppr_dev_t/pipeline/ocio/aces_2.0/studio-config-v1.0.0_aces-v1.3_ocio-v2.0.ocio'
         env_vars['OCIO'] = ocio_path_linux
+        print("DEBUG: Error getting OCIO from script: {}".format(e))
+        print("DEBUG: Using default OCIO: {}".format(ocio_path_linux))
 
     return env_vars
 
