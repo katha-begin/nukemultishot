@@ -345,7 +345,10 @@ except Exception as e:
             self.logger.error(f"Error saving format: {e}")
 
     def _create_individual_root_knobs(self, root_variables: Dict[str, str]):
-        """Create individual knobs for root variables so they can be accessed as [value root.VARIABLE_NAME]."""
+        """Create individual knobs for root variables so they can be accessed as [value root.VARIABLE_NAME].
+
+        ONLY creates/updates PROJ_ROOT and IMG_ROOT knobs to avoid conflicts with existing knobs.
+        """
         try:
             import nuke
             import platform
@@ -367,10 +370,16 @@ except Exception as e:
                 'T:\\': '/mnt/ppr_dev_t/'
             }
 
-            for key, value in root_variables.items():
-                # Replace Windows paths with OS-appropriate paths for PROJ_ROOT and IMG_ROOT
+            # ONLY process PROJ_ROOT and IMG_ROOT to avoid conflicts with other knobs
+            for key in ['PROJ_ROOT', 'IMG_ROOT']:
+                if key not in root_variables:
+                    continue
+
+                value = root_variables[key]
+
+                # Replace Windows paths with OS-appropriate paths
                 final_value = str(value)
-                if key in ['PROJ_ROOT', 'IMG_ROOT'] and platform.system() == 'Linux':
+                if platform.system() == 'Linux':
                     for win_path, linux_path in path_mappings.items():
                         if win_path in final_value:
                             final_value = final_value.replace(win_path, linux_path).replace('\\', '/')
@@ -386,12 +395,18 @@ except Exception as e:
                     root[key].setValue(final_value)
                     self.logger.info(f"Created individual knob: {key} = {final_value}")
                 else:
-                    # Knob already exists - update its value with OS-appropriate path
-                    root[key].setValue(final_value)
-                    self.logger.debug(f"Updated knob {key} = {final_value}")
+                    # Knob already exists - check if it's a String_Knob before updating
+                    existing_knob = root[key]
+                    if isinstance(existing_knob, nuke.String_Knob):
+                        existing_knob.setValue(final_value)
+                        self.logger.debug(f"Updated knob {key} = {final_value}")
+                    else:
+                        self.logger.warning(f"Knob {key} exists but is not a String_Knob (type: {type(existing_knob).__name__}), skipping update")
 
         except Exception as e:
             self.logger.error(f"Error creating individual root knobs: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
 
     def _ensure_context_variable_knobs(self):
         """Ensure context variables (project, ep, seq, shot) have individual knobs for [value root.variable] access."""
