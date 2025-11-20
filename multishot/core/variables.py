@@ -190,8 +190,9 @@ try:
                     replaced_count += 1
                     print("  Camera '{}': {} -> {}".format(node.name(), original_path, file_path))
 
-        # Replace paths in root knobs (PROJ_ROOT, IMG_ROOT, customOCIOConfigPath)
-        for knob_name in ['PROJ_ROOT', 'IMG_ROOT', 'customOCIOConfigPath']:
+        # Replace paths in root knobs (PROJ_ROOT, IMG_ROOT)
+        # NOTE: We do NOT replace customOCIOConfigPath - OCIO is set via environment variable before Nuke starts
+        for knob_name in ['PROJ_ROOT', 'IMG_ROOT']:
             if nuke.root().knob(knob_name):
                 knob_value = nuke.root()[knob_name].value()
                 original_value = knob_value
