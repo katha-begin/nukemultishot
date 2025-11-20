@@ -530,11 +530,14 @@ try:
         # Only ensure variables are accessible for expression evaluation
         print("Multishot: Batch mode detected - initializing variables only...")
 
-        # DO NOT call immediately! The script hasn't loaded yet!
-        # The .nk file has an onScriptLoad callback that will create the knobs.
-        # We just add our debug callback to verify after the script loads.
+        # CRITICAL: In batch mode, the script is loaded BEFORE init.py runs!
+        # So we need to call the function immediately, not as a callback.
+        # The script is already loaded when we get here.
 
-        # Add as callbacks for when scripts are loaded
+        # Call immediately to create knobs from JSON
+        ensure_variables_for_batch_mode()
+
+        # Also add as callbacks for when scripts are loaded (for safety)
         nuke.addOnScriptLoad(ensure_variables_for_batch_mode)
         nuke.addOnCreate(ensure_variables_for_batch_mode, nodeClass='Root')
 
