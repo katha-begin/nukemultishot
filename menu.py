@@ -123,20 +123,8 @@ try:
 
             multishot_nodes.addCommand(
                 'Switch',
-                'import multishot.nodes.switch_node; multishot.nodes.switch_node.create_multishot_switch()',
-                tooltip='Create a Multishot Switch node with variable-based switching'
-            )
-            
-            multishot_nodes.addCommand(
-                'Write',
-                'nuke.createNode("MultishotWrite")',
-                tooltip='Create a Multishot Write node with variable-driven paths'
-            )
-            
-            multishot_nodes.addCommand(
-                'Switch',
-                'nuke.createNode("MultishotSwitch")',
-                tooltip='Create a Multishot Switch node for shot-based switching'
+                'nuke.createNode("multishot_switch")',
+                tooltip='Create a Multishot Switch gizmo - routes inputs based on root.shot'
             )
             
             logger.info("Multishot nodes menu setup completed")

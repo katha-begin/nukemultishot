@@ -1,0 +1,109 @@
+# multishot_switch gizmo
+# Automatically selects input based on root.shot matching shot slots
+# Input 0 = main (default/fallback)
+# Input 1-5 = shotA through shotE
+# Tile color changes based on active input for visual feedback
+
+Gizmo {
+ name multishot_switch
+ tile_color {{"\[expr \{\n    \[value Switch_main.which] == 0 ? 0x7f7f7fff :\n    \[value Switch_main.which] == 1 ? 0xff5555ff :\n    \[value Switch_main.which] == 2 ? 0x55cc55ff :\n    \[value Switch_main.which] == 3 ? 0x5588ffff :\n    \[value Switch_main.which] == 4 ? 0xffcc00ff :\n    \[value Switch_main.which] == 5 ? 0xcc55ffff : 0x7f7f7fff\n\}]"}}
+ note_font "Verdana Bold"
+ addUserKnob {20 multishot_switch_tab l "Multishot Switch"}
+
+ addUserKnob {26 info_text l "" +STARTLINE T "<b>Shot-based Input Routing</b>\nReads shot name from root.shot and switches to matching input.\nNode color changes based on active input."}
+ addUserKnob {26 divider1 l "" +STARTLINE}
+ 
+ addUserKnob {26 color_legend l "" +STARTLINE T "<font color='#7f7f7f'>■</font> Main (0)  <font color='#ff5555'>■</font> A (1)  <font color='#55cc55'>■</font> B (2)  <font color='#5588ff'>■</font> C (3)  <font color='#ffcc00'>■</font> D (4)  <font color='#cc55ff'>■</font> E (5)"}
+ addUserKnob {26 divider_slots l "" +STARTLINE}
+
+ addUserKnob {1 shotA l "<font color='#ff5555'>■</font> Shot A (Input 1)" t "Shot code for Input 1 - RED"}
+ shotA ""
+ addUserKnob {22 set_shotA l "Set from root.shot" t "Copy current root.shot value to Shot A" -STARTLINE T "n = nuke.thisNode()\ntry:\n    shot_value = nuke.root()\['shot'].value()\n    n\['shotA'].setValue(shot_value)\nexcept:\n    nuke.message('Could not read root.shot')"}
+
+ addUserKnob {1 shotB l "<font color='#55cc55'>■</font> Shot B (Input 2)" t "Shot code for Input 2 - GREEN"}
+ shotB ""
+ addUserKnob {22 set_shotB l "Set from root.shot" t "Copy current root.shot value to Shot B" -STARTLINE T "n = nuke.thisNode()\ntry:\n    shot_value = nuke.root()\['shot'].value()\n    n\['shotB'].setValue(shot_value)\nexcept:\n    nuke.message('Could not read root.shot')"}
+
+ addUserKnob {1 shotC l "<font color='#5588ff'>■</font> Shot C (Input 3)" t "Shot code for Input 3 - BLUE"}
+ shotC ""
+ addUserKnob {22 set_shotC l "Set from root.shot" t "Copy current root.shot value to Shot C" -STARTLINE T "n = nuke.thisNode()\ntry:\n    shot_value = nuke.root()\['shot'].value()\n    n\['shotC'].setValue(shot_value)\nexcept:\n    nuke.message('Could not read root.shot')"}
+
+ addUserKnob {1 shotD l "<font color='#ffcc00'>■</font> Shot D (Input 4)" t "Shot code for Input 4 - YELLOW"}
+ shotD ""
+ addUserKnob {22 set_shotD l "Set from root.shot" t "Copy current root.shot value to Shot D" -STARTLINE T "n = nuke.thisNode()\ntry:\n    shot_value = nuke.root()\['shot'].value()\n    n\['shotD'].setValue(shot_value)\nexcept:\n    nuke.message('Could not read root.shot')"}
+
+ addUserKnob {1 shotE l "<font color='#cc55ff'>■</font> Shot E (Input 5)" t "Shot code for Input 5 - PURPLE"}
+ shotE ""
+ addUserKnob {22 set_shotE l "Set from root.shot" t "Copy current root.shot value to Shot E" -STARTLINE T "n = nuke.thisNode()\ntry:\n    shot_value = nuke.root()\['shot'].value()\n    n\['shotE'].setValue(shot_value)\nexcept:\n    nuke.message('Could not read root.shot')"}
+ 
+ addUserKnob {26 divider2 l "" +STARTLINE}
+ addUserKnob {22 clear_all l "Clear All Shots" t "Clear all shot slots" T "n = nuke.thisNode()\nfor slot in \['shotA', 'shotB', 'shotC', 'shotD', 'shotE']:\n    n\[slot].setValue('')"}
+ 
+ addUserKnob {26 divider3 l "" +STARTLINE}
+ addUserKnob {26 status_label l "Current root.shot:" T ""}
+ addUserKnob {26 current_shot l "" +STARTLINE T "<b>\[value root.shot]</b>"}
+ addUserKnob {26 active_input l "Active Input:" T ""}
+ addUserKnob {26 active_input_num l "" +STARTLINE T "<b>\[value Switch_main.which]</b>"}
+}
+
+ Input {
+  inputs 0
+  name main
+  label "main (default)"
+  xpos 0
+  ypos -200
+ }
+ Input {
+  inputs 0
+  name shotA_input
+  label "shotA"
+  xpos 150
+  ypos -200
+  number 1
+ }
+ Input {
+  inputs 0
+  name shotB_input
+  label "shotB"
+  xpos 300
+  ypos -200
+  number 2
+ }
+ Input {
+  inputs 0
+  name shotC_input
+  label "shotC"
+  xpos 450
+  ypos -200
+  number 3
+ }
+ Input {
+  inputs 0
+  name shotD_input
+  label "shotD"
+  xpos 600
+  ypos -200
+  number 4
+ }
+ Input {
+  inputs 0
+  name shotE_input
+  label "shotE"
+  xpos 750
+  ypos -200
+  number 5
+ }
+ Switch {
+  inputs 6
+  which {{"\[expr \{\n    \[string equal \[value root.shot] \[value parent.shotA]] ? 1 :\n    \[string equal \[value root.shot] \[value parent.shotB]] ? 2 :\n    \[string equal \[value root.shot] \[value parent.shotC]] ? 3 :\n    \[string equal \[value root.shot] \[value parent.shotD]] ? 4 :\n    \[string equal \[value root.shot] \[value parent.shotE]] ? 5 : 0\n\}]"}}
+  name Switch_main
+  xpos 0
+  ypos -100
+ }
+ Output {
+  name Output1
+  xpos 0
+  ypos 0
+ }
+end_group
+

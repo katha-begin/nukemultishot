@@ -252,46 +252,85 @@ class GizmoLoader:
         except Exception as e:
             self.logger.error(f"Error registering toolset {toolset_info.get('name', 'unknown')}: {e}")
     
+    def _add_plugin_paths(self, gizmo_dir: str):
+        """
+        Add gizmo directory and all subdirectories to Nuke's plugin path.
+
+        This allows nuke.createNode("gizmo_name") to work.
+
+        Args:
+            gizmo_dir: Root gizmo directory to add
+        """
+        if not NUKE_AVAILABLE or not os.path.exists(gizmo_dir):
+            return
+
+        try:
+            # Add main gizmo directory
+            nuke.pluginAddPath(gizmo_dir)
+            self.logger.debug(f"Added plugin path: {gizmo_dir}")
+
+            # Add all subdirectories (for organized gizmo folders)
+            for root, dirs, files in os.walk(gizmo_dir):
+                # Skip third-party package directories (they have their own menu.py)
+                if 'menu.py' in files and root != gizmo_dir:
+                    continue
+
+                # Add subdirectory if it contains .gizmo or .nk files
+                has_gizmos = any(f.endswith(('.gizmo', '.nk')) for f in files)
+                if has_gizmos and root != gizmo_dir:
+                    nuke.pluginAddPath(root)
+                    self.logger.debug(f"Added plugin path: {root}")
+
+        except Exception as e:
+            self.logger.error(f"Error adding plugin paths: {e}")
+
     def load_all(self):
         """
         Load and register all gizmos and toolsets from both tiers.
-        
+
         Loading order:
-        1. Tier 1 (Repository) gizmos
-        2. Tier 2 (Project) gizmos
-        3. Tier 1 (Repository) toolsets
-        4. Tier 2 (Project) toolsets
+        1. Add plugin paths for gizmo directories
+        2. Tier 1 (Repository) gizmos
+        3. Tier 2 (Project) gizmos
+        4. Tier 1 (Repository) toolsets
+        5. Tier 2 (Project) toolsets
         """
         self.logger.info("Loading gizmos and toolsets...")
-        
+
         # Get paths
         tier1_paths = self.get_tier1_paths()
         tier2_paths = self.get_tier2_paths()
-        
+
+        # Add plugin paths first so nuke.createNode("gizmo_name") works
+        if tier1_paths.get('gizmo') and os.path.exists(tier1_paths['gizmo']):
+            self._add_plugin_paths(tier1_paths['gizmo'])
+        if tier2_paths.get('gizmo') and os.path.exists(tier2_paths['gizmo']):
+            self._add_plugin_paths(tier2_paths['gizmo'])
+
         # Load Tier 1 Gizmos
         if tier1_paths.get('gizmo'):
             gizmos = self.discover_gizmos(tier1_paths['gizmo'])
             for gizmo in gizmos:
                 self.register_gizmo(gizmo, 'Multishot/Gizmos/Repository')
-        
+
         # Load Tier 2 Gizmos
         if tier2_paths.get('gizmo'):
             gizmos = self.discover_gizmos(tier2_paths['gizmo'])
             for gizmo in gizmos:
                 self.register_gizmo(gizmo, 'Multishot/Gizmos/Project')
-        
+
         # Load Tier 1 Toolsets
         if tier1_paths.get('toolset'):
             toolsets = self.discover_toolsets(tier1_paths['toolset'])
             for toolset in toolsets:
                 self.register_toolset(toolset, 'Multishot/Toolsets/Repository')
-        
+
         # Load Tier 2 Toolsets
         if tier2_paths.get('toolset'):
             toolsets = self.discover_toolsets(tier2_paths['toolset'])
             for toolset in toolsets:
                 self.register_toolset(toolset, 'Multishot/Toolsets/Project')
-        
+
         self.logger.info(f"Loaded {len(self.loaded_gizmos)} gizmos and {len(self.loaded_toolsets)} toolsets")
     
     def get_loaded_summary(self) -> str:
