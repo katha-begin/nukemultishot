@@ -472,6 +472,19 @@ def initialize_multishot():
             sys.path.insert(0, current_dir)
             print("Multishot: Added {} to Python path".format(current_dir))
 
+        # CRITICAL: Add gizmo paths early so nuke.createNode("gizmo_name") works
+        import nuke
+        gizmo_dir = os.path.join(current_dir, 'gizmo')
+        if os.path.exists(gizmo_dir):
+            nuke.pluginAddPath(gizmo_dir)
+            print("Multishot: Added gizmo path: {}".format(gizmo_dir))
+            # Add subdirectories too
+            for subdir in os.listdir(gizmo_dir):
+                subdir_path = os.path.join(gizmo_dir, subdir)
+                if os.path.isdir(subdir_path):
+                    nuke.pluginAddPath(subdir_path)
+                    print("Multishot: Added gizmo subpath: {}".format(subdir_path))
+
         # Import and initialize multishot
         import multishot
         print("Multishot: Imported multishot v{}".format(multishot.__version__))

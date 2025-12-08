@@ -62,49 +62,48 @@ def create_comppass_node():
     This creates an empty Group node with UI controls.
     User must click "Scan Layers" to populate available layers.
     """
-    try:
-        import nuke
+    import nuke
 
-        # Get selected node (should be Read node or similar)
-        sel = nuke.selectedNodes()
-        if not sel:
-            nuke.message("Please select a Read node or node with AOV layers first.")
-            return None
+    # Get selected node (should be Read node or similar)
+    sel = nuke.selectedNodes()
+    if not sel:
+        nuke.message("Please select a Read node or node with AOV layers first.")
+        return None
 
-        source_node = sel[0]
+    source_node = sel[0]
 
-        # Create the group node
-        group = nuke.createNode('Group', inpanel=False)
-        group['name'].setValue('CompPass')
-        group['tile_color'].setValue(0x7aa9ffff)
-        group['note_font'].setValue('Verdana Bold')
+    # Create the group node
+    group = nuke.createNode('Group', inpanel=False)
+    group['name'].setValue('CompPass')
+    group['tile_color'].setValue(0x7aa9ffff)
+    group['note_font'].setValue('Verdana Bold')
 
-        # Position below source
-        group.setXpos(source_node.xpos())
-        group.setYpos(source_node.ypos() + 150)
-        group.setInput(0, source_node)
+    # Position below source
+    group.setXpos(source_node.xpos())
+    group.setYpos(source_node.ypos() + 150)
+    group.setInput(0, source_node)
 
-        # Create basic internal structure
-        group.begin()
+    # Create basic internal structure
+    group.begin()
 
-        input_node = nuke.createNode('Input', inpanel=False)
-        input_node['name'].setValue('Input1')
-        input_node.setXpos(0)
-        input_node.setYpos(0)
+    input_node = nuke.createNode('Input', inpanel=False)
+    input_node['name'].setValue('Input1')
+    input_node.setXpos(0)
+    input_node.setYpos(0)
 
-        output_node = nuke.createNode('Output', inpanel=False)
-        output_node['name'].setValue('Output1')
-        output_node.setInput(0, input_node)
-        output_node.setXpos(0)
-        output_node.setYpos(200)
+    output_node = nuke.createNode('Output', inpanel=False)
+    output_node['name'].setValue('Output1')
+    output_node.setInput(0, input_node)
+    output_node.setXpos(0)
+    output_node.setYpos(200)
 
-        group.end()
+    group.end()
 
-        # Add user knobs
-        _add_comppass_knobs(group)
+    # Add user knobs
+    _add_comppass_knobs(group)
 
-        logger.info("CompPass node created")
-        return group
+    logger.info("CompPass node created")
+    return group
 
 
 
