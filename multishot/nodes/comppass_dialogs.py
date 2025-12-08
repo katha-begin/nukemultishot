@@ -266,21 +266,26 @@ class MirrorDialog(QDialog):
 
         # Source info
         source_name = self.source_node.name()
+        source_full_name = self.source_node.fullName()
         source_ns = self.source_node['namespace'].value() if self.source_node.knob('namespace') else 'master'
         source_layers = self._get_layer_count(self.source_node)
         self.source_label.setText(
             f"<b>{source_name}</b> | Namespace: <b>{source_ns}</b> | Layers: {source_layers}"
         )
 
-        # Find all CompPass nodes - simple approach: check ALL nodes for comppass_tab knob
+        # Find all CompPass nodes from ROOT context (important!)
+        # Must exit any group context to search the whole script
         self.comppass_nodes = []
-        for node in nuke.allNodes(recurseGroups=True):
-            # Skip source node (compare by fullName to handle nested groups)
-            if node.fullName() == self.source_node.fullName():
-                continue
-            # Check if it's a CompPass node (has comppass_tab knob)
-            if node.knob('comppass_tab'):
-                self.comppass_nodes.append(node)
+
+        # Save current context and go to root
+        with nuke.root():
+            for node in nuke.allNodes(recurseGroups=True):
+                # Skip source node
+                if node.fullName() == source_full_name:
+                    continue
+                # Check if it's a CompPass node (has comppass_tab knob)
+                if node.knob('comppass_tab'):
+                    self.comppass_nodes.append(node)
 
         # Clear table first
         self.table.clearContents()
