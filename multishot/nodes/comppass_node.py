@@ -119,9 +119,19 @@ def _add_comppass_knobs(group):
     info = nuke.Text_Knob('info', '', '<b>AOV/LightGroup Compositor</b>')
     group.addKnob(info)
 
+    # Status - FIRST LINE (moved from bottom)
+    status = nuke.Text_Knob('status', 'Status', 'Ready - Click "Scan Layers" to start')
+    group.addKnob(status)
+
     # Divider
     div1 = nuke.Text_Knob('div1', '')
     group.addKnob(div1)
+
+    # Namespace knob - for grouping/mirroring
+    namespace_knob = nuke.String_Knob('namespace', 'Namespace')
+    namespace_knob.setValue('master')
+    namespace_knob.setTooltip('Namespace for grouping CompPass nodes (used for Mirror feature)')
+    group.addKnob(namespace_knob)
 
     # Layer prefix filter
     prefix_knob = nuke.String_Knob('layer_prefixes', 'Layer Prefixes')
@@ -129,9 +139,33 @@ def _add_comppass_knobs(group):
     prefix_knob.setTooltip('Comma-separated prefixes to filter layers')
     group.addKnob(prefix_knob)
 
-    # Scan button
-    scan_btn = nuke.PyScript_Knob('scan_layers', 'Scan Layers')
-    scan_btn.setTooltip('Scan input for available AOV/LightGroup layers')
+    # Divider
+    div2 = nuke.Text_Knob('div2', '')
+    group.addKnob(div2)
+
+    # AOV Layers section header
+    aov_header = nuke.Text_Knob('aov_header', '', '<b>AOV Layers:</b>')
+    group.addKnob(aov_header)
+
+    # Selected layers (hidden storage - UI managed by panel)
+    selected = nuke.Multiline_Eval_String_Knob('selected_layers', 'Selected Layers')
+    selected.setValue('')
+    selected.setTooltip('Layers to include (one per line)')
+    group.addKnob(selected)
+
+    # AOV Manager button - opens Qt panel for +/- management
+    aov_mgr_btn = nuke.PyScript_Knob('aov_manager', 'Manage AOVs...')
+    aov_mgr_btn.setTooltip('Open AOV Manager to add/remove layers')
+    aov_mgr_cmd = '''
+import multishot.nodes.comppass_node as cp
+cp.open_aov_manager(nuke.thisNode())
+'''
+    aov_mgr_btn.setValue(aov_mgr_cmd)
+    group.addKnob(aov_mgr_btn)
+
+    # Scan button (quick scan without opening panel)
+    scan_btn = nuke.PyScript_Knob('scan_layers', 'Scan All')
+    scan_btn.setTooltip('Scan input and add all matching AOV layers')
     scan_cmd = '''
 import multishot.nodes.comppass_node as cp
 cp.scan_layers_callback(nuke.thisNode())
@@ -140,28 +174,11 @@ cp.scan_layers_callback(nuke.thisNode())
     group.addKnob(scan_btn)
 
     # Divider
-    div2 = nuke.Text_Knob('div2', '')
-    group.addKnob(div2)
-
-    # Available layers (multiline display)
-    avail = nuke.Multiline_Eval_String_Knob('available_layers', 'Available Layers')
-    avail.setValue('')
-    avail.setEnabled(False)
-    avail.setTooltip('Layers found in input node')
-    group.addKnob(avail)
-
-    # Selected layers (user editable)
-    selected = nuke.Multiline_Eval_String_Knob('selected_layers', 'Selected Layers')
-    selected.setValue('')
-    selected.setTooltip('Layers to include (one per line). Edit to add/remove.')
-    group.addKnob(selected)
-
-    # Divider
     div3 = nuke.Text_Knob('div3', '')
     group.addKnob(div3)
 
     # Build button
-    build_btn = nuke.PyScript_Knob('build_network', 'Build Network')
+    build_btn = nuke.PyScript_Knob('build_network', 'Build')
     build_btn.setTooltip('Build the AOV compositing network for selected layers')
     build_cmd = '''
 import multishot.nodes.comppass_node as cp
@@ -173,7 +190,6 @@ cp.build_network_callback(nuke.thisNode())
     # Rebuild button
     rebuild_btn = nuke.PyScript_Knob('rebuild_network', 'Rebuild')
     rebuild_btn.setTooltip('Clear and rebuild the network')
-    rebuild_btn.setFlag(nuke.STARTLINE)
     rebuild_cmd = '''
 import multishot.nodes.comppass_node as cp
 cp.rebuild_network_callback(nuke.thisNode())
@@ -195,13 +211,23 @@ cp.clear_network_callback(nuke.thisNode())
     div4 = nuke.Text_Knob('div4', '')
     group.addKnob(div4)
 
-    # Status
-    status = nuke.Text_Knob('status', 'Status', 'Ready - Click "Scan Layers" to start')
-    group.addKnob(status)
+    # Mirror section header
+    mirror_header = nuke.Text_Knob('mirror_header', '', '<b>Mirror Settings:</b>')
+    group.addKnob(mirror_header)
+
+    # Mirror button - opens Qt panel for mirroring
+    mirror_btn = nuke.PyScript_Knob('mirror_settings', 'Mirror to Other Nodes...')
+    mirror_btn.setTooltip('Open Mirror dialog to copy settings to other CompPass nodes')
+    mirror_cmd = '''
+import multishot.nodes.comppass_node as cp
+cp.open_mirror_dialog(nuke.thisNode())
+'''
+    mirror_btn.setValue(mirror_cmd)
+    group.addKnob(mirror_btn)
 
 
 def scan_layers_callback(group):
-    """Callback for Scan Layers button."""
+    """Callback for Scan All button - scans input and adds all matching layers."""
     import nuke
 
     try:
@@ -220,21 +246,39 @@ def scan_layers_callback(group):
 
         if not layers:
             group['status'].setValue('<font color="orange">No matching layers found</font>')
-            group['available_layers'].setValue('')
             return
 
-        # Update available layers display
-        group['available_layers'].setValue('\n'.join(layers))
-
-        # If selected is empty, auto-populate with all found layers
-        if not group['selected_layers'].value().strip():
-            group['selected_layers'].setValue('\n'.join(layers))
-
+        # Set all found layers as selected
+        group['selected_layers'].setValue('\n'.join(layers))
         group['status'].setValue(f'<font color="green">Found {len(layers)} layers</font>')
 
     except Exception as e:
         logger.error(f"Error scanning layers: {e}")
         group['status'].setValue(f'<font color="red">Error: {e}</font>')
+
+
+def open_aov_manager(group):
+    """Open AOV Manager dialog for adding/removing layers."""
+    try:
+        from .comppass_dialogs import AOVManagerDialog
+        dialog = AOVManagerDialog(group)
+        dialog.exec_()
+    except Exception as e:
+        logger.error(f"Error opening AOV Manager: {e}")
+        import nuke
+        nuke.message(f"Error opening AOV Manager: {e}")
+
+
+def open_mirror_dialog(group):
+    """Open Mirror dialog for copying settings to other CompPass nodes."""
+    try:
+        from .comppass_dialogs import MirrorDialog
+        dialog = MirrorDialog(group)
+        dialog.exec_()
+    except Exception as e:
+        logger.error(f"Error opening Mirror dialog: {e}")
+        import nuke
+        nuke.message(f"Error opening Mirror dialog: {e}")
 
 
 def clear_network_callback(group):
@@ -565,3 +609,75 @@ def _link_knobs_to_nodes(group, layers):
         switch_node['which'].setExpression(switch_expr)
 
     group.end()
+
+
+def mirror_settings(source_node, target_nodes, mirror_exposure=True, mirror_gain=True, mirror_enable=True):
+    """
+    Mirror settings from source CompPass node to target nodes.
+
+    Args:
+        source_node: Source CompPass node
+        target_nodes: List of target CompPass nodes
+        mirror_exposure: Whether to mirror Exposure values
+        mirror_gain: Whether to mirror Gain/Color values
+        mirror_enable: Whether to mirror Enable values
+
+    Returns:
+        Number of successfully mirrored nodes
+    """
+    success_count = 0
+
+    # Get source layers
+    source_layers_text = source_node['selected_layers'].value().strip()
+    if not source_layers_text:
+        logger.warning("Source node has no layers")
+        return 0
+
+    source_layers = [l.strip() for l in source_layers_text.split('\n') if l.strip()]
+
+    for target in target_nodes:
+        try:
+            # Get target layers
+            target_layers_text = target['selected_layers'].value().strip()
+            if not target_layers_text:
+                continue
+
+            target_layers = [l.strip() for l in target_layers_text.split('\n') if l.strip()]
+
+            # Mirror matching layers (exact match only)
+            mirrored_any = False
+            for layer in source_layers:
+                if layer not in target_layers:
+                    continue  # Skip non-matching layers
+
+                clean_layer = clean_layer_name(layer)
+
+                # Mirror Exposure
+                if mirror_exposure:
+                    src_knob = f'exposure_{clean_layer}'
+                    if source_node.knob(src_knob) and target.knob(src_knob):
+                        target[src_knob].setValue(source_node[src_knob].value())
+                        mirrored_any = True
+
+                # Mirror Gain/Color
+                if mirror_gain:
+                    src_knob = f'gain_{clean_layer}'
+                    if source_node.knob(src_knob) and target.knob(src_knob):
+                        target[src_knob].setValue(source_node[src_knob].value())
+                        mirrored_any = True
+
+                # Mirror Enable
+                if mirror_enable:
+                    src_knob = f'enable_{clean_layer}'
+                    if source_node.knob(src_knob) and target.knob(src_knob):
+                        target[src_knob].setValue(source_node[src_knob].value())
+                        mirrored_any = True
+
+            if mirrored_any:
+                success_count += 1
+                logger.info(f"Mirrored settings to {target.name()}")
+
+        except Exception as e:
+            logger.error(f"Error mirroring to {target.name()}: {e}")
+
+    return success_count
