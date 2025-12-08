@@ -9,7 +9,7 @@ Group {
  inputs 6
  tile_color 0x7f7f7fff
  note_font "Verdana Bold"
- autolabel "n = nuke.thisNode()\ntry:\n    sw = n.node('Switch_main')\n    if sw:\n        w = int(sw\['which'].value())\n        colors = \[0x7f7f7fff, 0xff5555ff, 0x55cc55ff, 0x5588ffff, 0xffcc00ff, 0xcc55ffff]\n        n\['tile_color'].setValue(colors\[w] if w < len(colors) else 0x7f7f7fff)\nexcept: pass\nnuke.thisNode().name()"
+ autolabel "(lambda n: (n\['tile_color'].setValue(\[0x7f7f7fff,0xff5555ff,0x55cc55ff,0x5588ffff,0xffcc00ff,0xcc55ffff]\[min(int(n.node('Switch_main')\['which'].value()),5)]), n.name())\[1])(nuke.thisNode())"
 
  addUserKnob {20 multishot_switch_tab l "Multishot Switch"}
 
