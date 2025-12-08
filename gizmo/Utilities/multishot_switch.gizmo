@@ -21,147 +21,15 @@ Group {
  addUserKnob {3 input_count l "Input Count" t "Number of shot inputs (excluding main)"}
  input_count 0
 
- addUserKnob {22 add_input_btn l "Add Shot Input" t "Add a new shot input with shot name field" T "exec('''
-import nuke
+ addUserKnob {22 add_input_btn l "Add Shot Input" t "Add a new shot input with shot name field" T "from multishot.nodes.switch_node import add_shot_input; add_shot_input(nuke.thisNode())"}
 
-node = nuke.thisNode()
-count = int(node\['input_count'].value()) + 1
-node\['input_count'].setValue(count)
-
-# Colors for inputs
-colors = \['#ff5555', '#55cc55', '#5588ff', '#ffcc00', '#cc55ff', '#55ffff', '#ff55ff', '#ffaa55'\]
-color = colors\[(count - 1) % len(colors)\]
-
-# Add shot name knob
-shot_knob = nuke.String_Knob('shot_input_%d' % count, '<font color=\"%s\">Input %d</font>' % (color, count))
-shot_knob.setTooltip('Shot names for Input %d (comma-separated, e.g. SH010, SH020, SH030)' % count)
-node.addKnob(shot_knob)
-
-# Add \"Set from root.shot\" button
-set_btn = nuke.PyScript_Knob('set_shot_%d' % count, 'Set from root.shot')
-set_btn.setFlag(nuke.STARTLINE, False)
-set_btn.setTooltip('Add current root.shot to this input')
-set_btn.setValue(\"\"\"
-n = nuke.thisNode()
-knob = n['shot_input_%d']
-current = knob.value().strip()
-try:
-    shot = nuke.root()['shot'].value()
-    if current:
-        # Append if not already there
-        shots = [s.strip() for s in current.split(',')]
-        if shot not in shots:
-            shots.append(shot)
-            knob.setValue(', '.join(shots))
-    else:
-        knob.setValue(shot)
-except:
-    nuke.message('Could not read root.shot')
-\"\"\" % count)
-node.addKnob(set_btn)
-
-# Add Input node inside group
-node.begin()
-input_node = nuke.createNode('Input', inpanel=False)
-input_node['name'].setValue('Input%d' % count)
-input_node.setXpos(count * 150)
-input_node.setYpos(-200)
-node.end()
-
-# Update switch
-node.knob('update_switch_btn').execute()
-
-nuke.message('Added Input %d. Connect your shot comp to the new input arrow.' % count)
-''')"}
-
- addUserKnob {22 update_switch_btn l "Update Switch" t "Rebuild internal switch based on current inputs" T "exec('''
-import nuke
-
-node = nuke.thisNode()
-count = int(node\['input_count'].value())
-
-node.begin()
-
-# Find or create switch
-switch = None
-for n in nuke.allNodes('Switch'):
-    if n.name() == 'ShotSwitch':
-        switch = n
-        break
-
-if not switch:
-    switch = nuke.createNode('Switch', inpanel=False)
-    switch['name'].setValue('ShotSwitch')
-    switch.setXpos(0)
-    switch.setYpos(-50)
-
-# Connect inputs to switch
-# Input 0 is main/default
-main_input = nuke.toNode('Input0')
-if main_input:
-    switch.setInput(0, main_input)
-
-for i in range(1, count + 1):
-    inp = nuke.toNode('Input%d' % i)
-    if inp:
-        switch.setInput(i, inp)
-
-# Set switch expression
-if count > 0:
-    # Build Python expression for matching
-    expr_lines = \['# Auto-generated switch expression'\]
-    expr_lines.append('ret = 0')
-    expr_lines.append('try:')
-    expr_lines.append('    shot = nuke.root()[\"shot\"].value()')
-    for i in range(1, count + 1):
-        expr_lines.append('    shots_%d = [s.strip() for s in nuke.thisParent()[\"shot_input_%d\"].value().split(\",\") if s.strip()]' % (i, i))
-        expr_lines.append('    if shot in shots_%d: ret = %d' % (i, i))
-    expr_lines.append('except: pass')
-    expr_lines.append('ret')
-
-    switch['which'].setExpression('\\n'.join(expr_lines), 'python')
-else:
-    switch['which'].setValue(0)
-    switch['which'].clearAnimated()
-
-# Connect switch to output
-output = nuke.toNode('Output1')
-if output:
-    output.setInput(0, switch)
-
-node.end()
-''')"}
+ addUserKnob {22 update_switch_btn l "Update Switch" t "Rebuild internal switch based on current inputs" T "from multishot.nodes.switch_node import update_switch; update_switch(nuke.thisNode())"}
 
  addUserKnob {26 divider3 l "" +STARTLINE}
- addUserKnob {22 remove_last_btn l "Remove Last Input" t "Remove the last shot input" T "exec('''
-import nuke
+ addUserKnob {22 remove_last_btn l "Remove Last Input" t "Remove the last shot input" T "from multishot.nodes.switch_node import remove_last_input; remove_last_input(nuke.thisNode())"}
 
-node = nuke.thisNode()
-count = int(node\['input_count'].value())
-
-if count <= 0:
-    nuke.message('No shot inputs to remove.')
-else:
-    # Remove knobs
-    try:
-        node.removeKnob(node\['shot_input_%d' % count\])
-    except: pass
-    try:
-        node.removeKnob(node\['set_shot_%d' % count\])
-    except: pass
-
-    # Remove input node
-    node.begin()
-    inp = nuke.toNode('Input%d' % count)
-    if inp:
-        nuke.delete(inp)
-    node.end()
-
-    node\['input_count'\].setValue(count - 1)
-
-    # Update switch
-    node.knob('update_switch_btn').execute()
-''')"}
+ addUserKnob {26 divider4 l "" +STARTLINE}
+ addUserKnob {22 set_shot_btn l "Set from root.shot" t "Add current root.shot to last input" T "from multishot.nodes.switch_node import set_shot_from_root; set_shot_from_root(nuke.thisNode())"}
 }
 
  Input {

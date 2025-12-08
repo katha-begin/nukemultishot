@@ -15,7 +15,13 @@ Nodes:
 from .read_node import MultishotRead, create_multishot_read
 from .write_node import MultishotWrite, create_multishot_write
 from .write_gizmo import MultishotWriteGizmo, create_multishot_write_gizmo
-from .switch_node import create_multishot_switch  # Gizmo-based now
+from .switch_node import (
+    create_multishot_switch,
+    add_shot_input,
+    remove_last_input,
+    set_shot_from_root,
+    update_switch
+)
 from .comppass_node import create_comppass_node
 from .base_node import BaseMultishotNode
 
@@ -51,5 +57,9 @@ __all__ = [
     'create_multishot_write',
     'create_multishot_write_gizmo',
     'create_multishot_switch',
+    'add_shot_input',
+    'remove_last_input',
+    'set_shot_from_root',
+    'update_switch',
     'create_comppass_node'
 ]
