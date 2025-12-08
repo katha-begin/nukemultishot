@@ -272,28 +272,58 @@ class MirrorDialog(QDialog):
             f"<b>{source_name}</b> | Namespace: <b>{source_ns}</b> | Layers: {source_layers}"
         )
 
-        # Find all CompPass nodes
-        # CompPass nodes are identified by having 'comppass_tab' knob or 'selected_layers' knob
+        # Find all CompPass nodes recursively
         self.comppass_nodes = []
-        for node in nuke.allNodes('Group'):
-            if node.name() == source_name:
-                continue  # Skip source node
-            # Check if it's a CompPass node (has comppass_tab or selected_layers knob)
-            if node.knob('comppass_tab') or node.knob('selected_layers'):
-                self.comppass_nodes.append(node)
+        self._find_comppass_nodes_recursive(nuke.root(), source_name)
+
+        # Clear table first
+        self.table.clearContents()
+        self.table.setRowCount(0)
 
         # Populate table
-        self.table.setRowCount(len(self.comppass_nodes))
-        for i, node in enumerate(self.comppass_nodes):
-            self._add_node_row(i, node, source_ns)
-
-        # Show message if no other CompPass nodes found
-        if not self.comppass_nodes:
+        if self.comppass_nodes:
+            self.table.setRowCount(len(self.comppass_nodes))
+            for i, node in enumerate(self.comppass_nodes):
+                self._add_node_row(i, node, source_ns)
+        else:
+            # Show message if no other CompPass nodes found
             self.table.setRowCount(1)
             no_nodes_item = QTableWidgetItem("No other CompPass nodes found in script")
             no_nodes_item.setFlags(no_nodes_item.flags() & ~Qt.ItemIsEditable)
             self.table.setItem(0, 1, no_nodes_item)
             self.table.setSpan(0, 1, 1, 3)
+
+    def _find_comppass_nodes_recursive(self, parent, source_name):
+        """Recursively find all CompPass nodes."""
+        import nuke
+
+        # Get all nodes - try different methods
+        try:
+            if parent == nuke.root():
+                nodes = nuke.allNodes(recurseGroups=False)
+            else:
+                parent.begin()
+                nodes = nuke.allNodes(recurseGroups=False)
+                parent.end()
+        except:
+            nodes = []
+
+        for node in nodes:
+            # Skip source node
+            if node.name() == source_name:
+                continue
+
+            # Check if it's a Group-type node
+            node_class = node.Class()
+            if node_class in ('Group', 'Gizmo'):
+                # Check if it's a CompPass node (has comppass_tab knob)
+                if node.knob('comppass_tab'):
+                    self.comppass_nodes.append(node)
+                # Recurse into groups
+                try:
+                    self._find_comppass_nodes_recursive(node, source_name)
+                except:
+                    pass
 
     def _get_layer_count(self, node):
         """Get number of layers in a CompPass node."""
@@ -333,6 +363,8 @@ class MirrorDialog(QDialog):
         source_ns = self.source_node['namespace'].value() if self.source_node.knob('namespace') else 'master'
         for i, node in enumerate(self.comppass_nodes):
             checkbox = self.table.cellWidget(i, 0)
+            if not checkbox:
+                continue
             ns = node['namespace'].value() if node.knob('namespace') else ''
             checkbox.setChecked(ns == source_ns)
 
@@ -340,13 +372,16 @@ class MirrorDialog(QDialog):
         """Deselect all nodes."""
         for i in range(self.table.rowCount()):
             checkbox = self.table.cellWidget(i, 0)
-            checkbox.setChecked(False)
+            if checkbox:  # Guard against None when no nodes found
+                checkbox.setChecked(False)
 
     def get_selected_nodes(self):
         """Get list of selected target nodes."""
         selected = []
         for i, node in enumerate(self.comppass_nodes):
             checkbox = self.table.cellWidget(i, 0)
+            if not checkbox:
+                continue
             if checkbox.isChecked():
                 selected.append(node)
         return selected
