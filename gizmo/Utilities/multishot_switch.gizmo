@@ -7,7 +7,7 @@
 
 Gizmo {
  name multishot_switch
- tile_color 0x7f7f7fff
+ tile_color {{"\[expr \{ \[value Switch_main.which] == 1 ? 0xff5555ff : \[value Switch_main.which] == 2 ? 0x55cc55ff : \[value Switch_main.which] == 3 ? 0x5588ffff : \[value Switch_main.which] == 4 ? 0xffcc00ff : \[value Switch_main.which] == 5 ? 0xcc55ffff : 0x7f7f7fff \}]"}}
  note_font "Verdana Bold"
  addUserKnob {20 multishot_switch_tab l "Multishot Switch"}
 
@@ -41,10 +41,10 @@ Gizmo {
  addUserKnob {22 clear_all l "Clear All Shots" t "Clear all shot slots" T "n = nuke.thisNode()\nfor slot in \['shotA', 'shotB', 'shotC', 'shotD', 'shotE']:\n    n\[slot].setValue('')"}
 
  addUserKnob {26 divider3 l "" +STARTLINE}
- addUserKnob {26 status_label l "Current root.shot:" T ""}
- addUserKnob {26 current_shot l "" +STARTLINE T "<b>\[value root.shot]</b>"}
- addUserKnob {26 active_input l "Active Input:" T ""}
- addUserKnob {26 active_input_num l "" +STARTLINE T "<b>\[value Switch_main.which]</b>"}
+ addUserKnob {1 current_shot_display l "Current root.shot" +DISABLED}
+ current_shot_display {{"\[value root.shot]"}}
+ addUserKnob {3 active_input_display l "Active Input" +DISABLED}
+ active_input_display {{"\[value Switch_main.which]"}}
 }
 
  Input {
