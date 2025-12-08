@@ -9,7 +9,7 @@ Group {
  inputs 6
  tile_color 0x7f7f7fff
  note_font "Verdana Bold"
- knobChanged "n = nuke.thisNode()\ntry:\n    sw = n.node('Switch_main')\n    if sw:\n        w = int(sw\['which'].value())\n        colors = \[0x7f7f7fff, 0xff5555ff, 0x55cc55ff, 0x5588ffff, 0xffcc00ff, 0xcc55ffff]\n        n\['tile_color'].setValue(colors\[w] if w < len(colors) else 0x7f7f7fff)\n        n\['active_input_display'].setValue(w)\nexcept: pass"
+ autolabel "n = nuke.thisNode()\ntry:\n    sw = n.node('Switch_main')\n    if sw:\n        w = int(sw\['which'].value())\n        colors = \[0x7f7f7fff, 0xff5555ff, 0x55cc55ff, 0x5588ffff, 0xffcc00ff, 0xcc55ffff]\n        n\['tile_color'].setValue(colors\[w] if w < len(colors) else 0x7f7f7fff)\nexcept: pass\nnuke.thisNode().name()"
 
  addUserKnob {20 multishot_switch_tab l "Multishot Switch"}
 
@@ -18,8 +18,6 @@ Group {
 
  addUserKnob {26 color_legend l "" +STARTLINE T "<font color='#7f7f7f'>■</font> Main (0)  <font color='#ff5555'>■</font> A (1)  <font color='#55cc55'>■</font> B (2)  <font color='#5588ff'>■</font> C (3)  <font color='#ffcc00'>■</font> D (4)  <font color='#cc55ff'>■</font> E (5)"}
  addUserKnob {26 divider_slots l "" +STARTLINE}
-
- addUserKnob {22 update_color l "Update Color" t "Refresh tile color based on current switch state" T "n = nuke.thisNode()\ntry:\n    sw = n.node('Switch_main')\n    if sw:\n        w = int(sw\['which'].value())\n        colors = \[0x7f7f7fff, 0xff5555ff, 0x55cc55ff, 0x5588ffff, 0xffcc00ff, 0xcc55ffff]\n        n\['tile_color'].setValue(colors\[w] if w < len(colors) else 0x7f7f7fff)\n        n\['active_input_display'].setValue(w)\n        try:\n            shot = nuke.root()\['shot'].value()\n            n\['current_shot_display'].setValue(shot)\n        except: pass\nexcept: pass"}
 
  addUserKnob {1 shotA l "<font color='#ff5555'>■</font> Input 1" t "Shot names for Input 1 - RED (comma-separated)"}
  shotA ""
