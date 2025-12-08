@@ -101,6 +101,12 @@ Gizmo {
   name Switch_main
   xpos 0
   ypos -100
+  input0 main
+  input1 shotA_input
+  input2 shotB_input
+  input3 shotC_input
+  input4 shotD_input
+  input5 shotE_input
  }
  Output {
   name Output1
