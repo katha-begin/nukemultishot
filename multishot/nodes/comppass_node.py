@@ -454,13 +454,19 @@ def _build_internal_network(group, layers):
             final_merge = input_node
 
     # Create Switch for viewing individual layers
+    # Need to set inputs count first, then connect
+    num_inputs = len(grades) + 1  # combined + individual layers
     switch = nuke.createNode('Switch', inpanel=False)
     switch['name'].setValue('AOV_ViewSwitch')
     switch['label'].setValue('View Switch')
-    switch.setInput(0, final_merge)  # Combined as input 0
+    switch['inputs'].setValue(num_inputs)
 
+    # Connect individual grade outputs to inputs 1, 2, 3, ... first
     for i, grade in enumerate(grades):
         switch.setInput(i + 1, grade)
+
+    # Then connect combined output to input 0 (must be done after other inputs)
+    switch.setInput(0, final_merge)
 
     switch.setXpos(final_merge.xpos() if hasattr(final_merge, 'xpos') else 0)
     switch.setYpos(base_y + v_merge + 120)
