@@ -276,14 +276,18 @@ def clear_network_callback(group):
 
 
 def _remove_layer_knobs(group):
-    """Remove dynamically created layer control knobs."""
+    """Remove dynamically created layer control knobs and AOV Controls tab."""
     import nuke
 
     # Find and remove knobs that start with layer-specific prefixes
     knobs_to_remove = []
     for knob_name in group.knobs():
-        if knob_name.startswith(('exp_', 'gain_', 'view_', 'sep_', 'layer_div_')):
+        if knob_name.startswith(('exp_', 'gain_', 'view_', 'sep_', 'layer_div_', 'enable_')):
             knobs_to_remove.append(knob_name)
+
+    # Also remove the AOV Controls tab if it exists
+    if 'aov_controls' in group.knobs():
+        knobs_to_remove.append('aov_controls')
 
     for knob_name in knobs_to_remove:
         try:
@@ -407,10 +411,11 @@ def _build_internal_network(group, layers):
         grade.setYpos(base_y + v_grade)
         grades.append(grade)
 
-    # Create additive merge chain
+    # Create additive merge chain with disable support
     if len(grades) >= 2:
         prev = grades[0]
         for i in range(1, len(grades)):
+            clean_layer = clean_layer_name(layers[i])
             m = nuke.createNode('Merge2', inpanel=False)
             m['operation'].setValue('plus')
             m.setInput(0, prev)
@@ -418,12 +423,35 @@ def _build_internal_network(group, layers):
             m.setXpos(base_x + i * h_space)
             m.setYpos(base_y + v_merge)
             m['label'].setValue(f'+ {layers[i]}')
-            m['name'].setValue(f'{clean_layer_name(layers[i])}_Add')
+            m['name'].setValue(f'{clean_layer}_Merge')
             merges.append(m)
             prev = m
         final_merge = prev
+
+        # For the first layer, create a Multiply node to disable it
+        first_clean_layer = clean_layer_name(layers[0])
+        mult = nuke.createNode('Multiply', inpanel=False)
+        mult['name'].setValue(f'{first_clean_layer}_Disable')
+        mult['label'].setValue(f'Disable: {layers[0]}')
+        mult.setInput(0, grades[0])
+        mult.setXpos(base_x)
+        mult.setYpos(base_y + v_merge - 50)
+        # The first merge should take from the Multiply instead of grades[0]
+        if merges:
+            merges[0].setInput(0, mult)
     else:
-        final_merge = grades[0] if grades else input_node
+        # Single layer - add Multiply for disable
+        if grades:
+            first_clean_layer = clean_layer_name(layers[0])
+            mult = nuke.createNode('Multiply', inpanel=False)
+            mult['name'].setValue(f'{first_clean_layer}_Disable')
+            mult['label'].setValue(f'Disable: {layers[0]}')
+            mult.setInput(0, grades[0])
+            mult.setXpos(base_x)
+            mult.setYpos(base_y + v_merge)
+            final_merge = mult
+        else:
+            final_merge = input_node
 
     # Create Switch for viewing individual layers
     switch = nuke.createNode('Switch', inpanel=False)
@@ -508,6 +536,8 @@ def _link_knobs_to_nodes(group, layers):
         # Find internal nodes
         exp_node = nuke.toNode(f'{clean_layer}_Exposure')
         grade_node = nuke.toNode(f'{clean_layer}_Grade')
+        merge_node = nuke.toNode(f'{clean_layer}_Merge')
+        disable_node = nuke.toNode(f'{clean_layer}_Disable')
 
         if exp_node:
             # Link exposure channels to group knob
@@ -520,8 +550,14 @@ def _link_knobs_to_nodes(group, layers):
             grade_node['white'].setExpression(f'parent.gain_{clean_layer}.r', 0)
             grade_node['white'].setExpression(f'parent.gain_{clean_layer}.g', 1)
             grade_node['white'].setExpression(f'parent.gain_{clean_layer}.b', 2)
-            # Link mix to enable toggle
-            grade_node['mix'].setExpression(f'parent.enable_{clean_layer}')
+
+        # Link enable to disable mechanism
+        if i == 0 and disable_node:
+            # First layer uses Multiply node - set value to 0 when disabled
+            disable_node['value'].setExpression(f'parent.enable_{clean_layer}')
+        elif merge_node:
+            # Other layers use Merge disable
+            merge_node['disable'].setExpression(f'1-parent.enable_{clean_layer}')
 
     # Setup switch expression for view toggles
     switch_node = nuke.toNode('AOV_ViewSwitch')
