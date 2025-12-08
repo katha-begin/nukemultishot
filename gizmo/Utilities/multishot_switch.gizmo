@@ -53,6 +53,7 @@ Gizmo {
   label "main\n(default)"
   xpos 0
   ypos -200
+  number 0
  }
  Input {
   inputs 0
