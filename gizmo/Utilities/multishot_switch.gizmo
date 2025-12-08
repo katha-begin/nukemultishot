@@ -3,15 +3,16 @@
 # Input 0 = main (default/fallback)
 # Input 1-5 = shotA through shotE
 # Each shot slot supports comma-separated shot names (e.g. "SH010, SH020, SH030")
-# Tile color changes based on active input for visual feedback
 
-Gizmo {
+Group {
  name multishot_switch
- tile_color {{"\[expr \{ \[value Switch_main.which] == 1 ? 0xff5555ff : \[value Switch_main.which] == 2 ? 0x55cc55ff : \[value Switch_main.which] == 3 ? 0x5588ffff : \[value Switch_main.which] == 4 ? 0xffcc00ff : \[value Switch_main.which] == 5 ? 0xcc55ffff : 0x7f7f7fff \}]"}}
+ inputs 6
+ tile_color 0x7f7f7fff
  note_font "Verdana Bold"
+
  addUserKnob {20 multishot_switch_tab l "Multishot Switch"}
 
- addUserKnob {26 info_text l "" +STARTLINE T "<b>Shot-based Input Routing</b>\nReads shot name from root.shot and switches to matching input.\nSupports comma-separated shot names (e.g. SH010, SH020).\nNode color changes based on active input."}
+ addUserKnob {26 info_text l "" +STARTLINE T "<b>Shot-based Input Routing</b>\nReads shot name from root.shot and switches to matching input.\nSupports comma-separated shot names (e.g. SH010, SH020)."}
  addUserKnob {26 divider1 l "" +STARTLINE}
 
  addUserKnob {26 color_legend l "" +STARTLINE T "<font color='#7f7f7f'>■</font> Main (0)  <font color='#ff5555'>■</font> A (1)  <font color='#55cc55'>■</font> B (2)  <font color='#5588ff'>■</font> C (3)  <font color='#ffcc00'>■</font> D (4)  <font color='#cc55ff'>■</font> E (5)"}
@@ -41,63 +42,52 @@ Gizmo {
  addUserKnob {22 clear_all l "Clear All Shots" t "Clear all shot slots" T "n = nuke.thisNode()\nfor slot in \['shotA', 'shotB', 'shotC', 'shotD', 'shotE']:\n    n\[slot].setValue('')"}
 
  addUserKnob {26 divider3 l "" +STARTLINE}
- addUserKnob {1 current_shot_display l "Current root.shot" +DISABLED}
- current_shot_display {{"\[value root.shot]"}}
- addUserKnob {3 active_input_display l "Active Input" +DISABLED}
- active_input_display {{"\[value Switch_main.which]"}}
+ addUserKnob {26 current_shot_label l "Current root.shot:" T ""}
+ addUserKnob {1 current_shot_display l "" +DISABLED}
+ current_shot_display "\[value root.shot]"
+ addUserKnob {26 active_input_label l "Active Input:" T ""}
+ addUserKnob {3 active_input_display l "" +DISABLED}
+ active_input_display 0
 }
-
  Input {
   inputs 0
-  name shotE_input
-  label "Input 5\n\[value parent.shotE]"
+  name Input5
   xpos 750
   ypos -200
-  number 5
  }
  Input {
   inputs 0
-  name shotD_input
-  label "Input 4\n\[value parent.shotD]"
+  name Input4
   xpos 600
   ypos -200
-  number 4
  }
  Input {
   inputs 0
-  name shotC_input
-  label "Input 3\n\[value parent.shotC]"
+  name Input3
   xpos 450
   ypos -200
-  number 3
  }
  Input {
   inputs 0
-  name shotB_input
-  label "Input 2\n\[value parent.shotB]"
+  name Input2
   xpos 300
   ypos -200
-  number 2
  }
  Input {
   inputs 0
-  name shotA_input
-  label "Input 1\n\[value parent.shotA]"
+  name Input1
   xpos 150
   ypos -200
-  number 1
  }
  Input {
   inputs 0
-  name main
-  label "main\n(default)"
+  name Input0
   xpos 0
   ypos -200
-  number 0
  }
  Switch {
   inputs 6
-  which {{"\[expr \{\n    \[lsearch \[split \[string map \{\", \" \",\"\} \[value parent.shotA]] \",\"] \[value root.shot]] >= 0 ? 1 :\n    \[lsearch \[split \[string map \{\", \" \",\"\} \[value parent.shotB]] \",\"] \[value root.shot]] >= 0 ? 2 :\n    \[lsearch \[split \[string map \{\", \" \",\"\} \[value parent.shotC]] \",\"] \[value root.shot]] >= 0 ? 3 :\n    \[lsearch \[split \[string map \{\", \" \",\"\} \[value parent.shotD]] \",\"] \[value root.shot]] >= 0 ? 4 :\n    \[lsearch \[split \[string map \{\", \" \",\"\} \[value parent.shotE]] \",\"] \[value root.shot]] >= 0 ? 5 : 0\n\}]"}}
+  which {{"\[expr \{\[lsearch \[split \[string map \{\", \" \",\"\} \[value parent.shotA]] \",\"] \[value root.shot]] >= 0 ? 1 : \[lsearch \[split \[string map \{\", \" \",\"\} \[value parent.shotB]] \",\"] \[value root.shot]] >= 0 ? 2 : \[lsearch \[split \[string map \{\", \" \",\"\} \[value parent.shotC]] \",\"] \[value root.shot]] >= 0 ? 3 : \[lsearch \[split \[string map \{\", \" \",\"\} \[value parent.shotD]] \",\"] \[value root.shot]] >= 0 ? 4 : \[lsearch \[split \[string map \{\", \" \",\"\} \[value parent.shotE]] \",\"] \[value root.shot]] >= 0 ? 5 : 0\}]"}}
   name Switch_main
   xpos 0
   ypos -100
