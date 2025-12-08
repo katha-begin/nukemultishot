@@ -49,35 +49,11 @@ Gizmo {
 
  Input {
   inputs 0
-  name main
-  label "main\n(default)"
-  xpos 0
+  name shotE_input
+  label "Input 5\n\[value parent.shotE]"
+  xpos 750
   ypos -200
-  number 0
- }
- Input {
-  inputs 0
-  name shotA_input
-  label "Input 1\n\[value parent.shotA]"
-  xpos 150
-  ypos -200
-  number 1
- }
- Input {
-  inputs 0
-  name shotB_input
-  label "Input 2\n\[value parent.shotB]"
-  xpos 300
-  ypos -200
-  number 2
- }
- Input {
-  inputs 0
-  name shotC_input
-  label "Input 3\n\[value parent.shotC]"
-  xpos 450
-  ypos -200
-  number 3
+  number 5
  }
  Input {
   inputs 0
@@ -89,11 +65,35 @@ Gizmo {
  }
  Input {
   inputs 0
-  name shotE_input
-  label "Input 5\n\[value parent.shotE]"
-  xpos 750
+  name shotC_input
+  label "Input 3\n\[value parent.shotC]"
+  xpos 450
   ypos -200
-  number 5
+  number 3
+ }
+ Input {
+  inputs 0
+  name shotB_input
+  label "Input 2\n\[value parent.shotB]"
+  xpos 300
+  ypos -200
+  number 2
+ }
+ Input {
+  inputs 0
+  name shotA_input
+  label "Input 1\n\[value parent.shotA]"
+  xpos 150
+  ypos -200
+  number 1
+ }
+ Input {
+  inputs 0
+  name main
+  label "main\n(default)"
+  xpos 0
+  ypos -200
+  number 0
  }
  Switch {
   inputs 6
@@ -101,12 +101,6 @@ Gizmo {
   name Switch_main
   xpos 0
   ypos -100
-  input0 main
-  input1 shotA_input
-  input2 shotB_input
-  input3 shotC_input
-  input4 shotD_input
-  input5 shotE_input
  }
  Output {
   name Output1
