@@ -411,56 +411,49 @@ def _build_internal_network(group, layers):
         grade.setYpos(base_y + v_grade)
         grades.append(grade)
 
-    # Create additive merge chain with disable support
+    # Create Multiply node for first layer (to allow disabling it)
+    # This goes BEFORE the merge chain
+    first_clean_layer = clean_layer_name(layers[0])
+    first_mult = nuke.createNode('Multiply', inpanel=False)
+    first_mult['name'].setValue(f'{first_clean_layer}_Disable')
+    first_mult['label'].setValue(f'Disable: {layers[0]}')
+    first_mult.setInput(0, grades[0])
+    first_mult.setXpos(base_x)
+    first_mult.setYpos(base_y + v_merge - 50)
+
+    # Create additive merge chain
+    # Flow: first_mult -> Merge(+grade[1]) -> Merge(+grade[2]) -> ... -> final_merge
     if len(grades) >= 2:
-        prev = grades[0]
+        # Start with first_mult (which has grades[0] as input)
+        prev = first_mult
         for i in range(1, len(grades)):
             clean_layer = clean_layer_name(layers[i])
             m = nuke.createNode('Merge2', inpanel=False)
             m['operation'].setValue('plus')
-            m.setInput(0, prev)
-            m.setInput(1, grades[i])
+            m.setInput(0, prev)  # A input - previous result
+            m.setInput(1, grades[i])  # B input - next AOV
             m.setXpos(base_x + i * h_space)
             m.setYpos(base_y + v_merge)
             m['label'].setValue(f'+ {layers[i]}')
             m['name'].setValue(f'{clean_layer}_Merge')
             merges.append(m)
             prev = m
-        final_merge = prev
-
-        # For the first layer, create a Multiply node to disable it
-        first_clean_layer = clean_layer_name(layers[0])
-        mult = nuke.createNode('Multiply', inpanel=False)
-        mult['name'].setValue(f'{first_clean_layer}_Disable')
-        mult['label'].setValue(f'Disable: {layers[0]}')
-        mult.setInput(0, grades[0])
-        mult.setXpos(base_x)
-        mult.setYpos(base_y + v_merge - 50)
-        # The first merge should take from the Multiply instead of grades[0]
-        if merges:
-            merges[0].setInput(0, mult)
+        # final_merge is the LAST merge node (combined result of all AOVs)
+        final_merge = merges[-1]
     else:
-        # Single layer - add Multiply for disable
-        if grades:
-            first_clean_layer = clean_layer_name(layers[0])
-            mult = nuke.createNode('Multiply', inpanel=False)
-            mult['name'].setValue(f'{first_clean_layer}_Disable')
-            mult['label'].setValue(f'Disable: {layers[0]}')
-            mult.setInput(0, grades[0])
-            mult.setXpos(base_x)
-            mult.setYpos(base_y + v_merge)
-            final_merge = mult
-        else:
-            final_merge = input_node
+        # Single layer - just use the Multiply as final
+        final_merge = first_mult
 
     # Create Switch for viewing individual layers
+    # Input 0 = Combined (final_merge = last Merge node)
+    # Input 1, 2, 3... = Individual AOV grades
     switch = nuke.createNode('Switch', inpanel=False)
     switch['name'].setValue('AOV_ViewSwitch')
     switch['label'].setValue('View Switch')
 
-    # IMPORTANT: Connect input 0 (combined/final_merge) FIRST
-    # Then connect individual AOV grades to inputs 1, 2, 3...
+    # Connect input 0 to final_merge (the LAST merge, combined result)
     switch.setInput(0, final_merge)
+    # Connect individual grades to inputs 1, 2, 3...
     for i, grade in enumerate(grades):
         switch.setInput(i + 1, grade)
 
