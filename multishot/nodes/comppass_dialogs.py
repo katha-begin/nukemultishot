@@ -272,9 +272,15 @@ class MirrorDialog(QDialog):
             f"<b>{source_name}</b> | Namespace: <b>{source_ns}</b> | Layers: {source_layers}"
         )
 
-        # Find all CompPass nodes recursively
+        # Find all CompPass nodes - simple approach: check ALL nodes for comppass_tab knob
         self.comppass_nodes = []
-        self._find_comppass_nodes_recursive(nuke.root(), source_name)
+        for node in nuke.allNodes(recurseGroups=True):
+            # Skip source node (compare by fullName to handle nested groups)
+            if node.fullName() == self.source_node.fullName():
+                continue
+            # Check if it's a CompPass node (has comppass_tab knob)
+            if node.knob('comppass_tab'):
+                self.comppass_nodes.append(node)
 
         # Clear table first
         self.table.clearContents()
@@ -292,38 +298,6 @@ class MirrorDialog(QDialog):
             no_nodes_item.setFlags(no_nodes_item.flags() & ~Qt.ItemIsEditable)
             self.table.setItem(0, 1, no_nodes_item)
             self.table.setSpan(0, 1, 1, 3)
-
-    def _find_comppass_nodes_recursive(self, parent, source_name):
-        """Recursively find all CompPass nodes."""
-        import nuke
-
-        # Get all nodes - try different methods
-        try:
-            if parent == nuke.root():
-                nodes = nuke.allNodes(recurseGroups=False)
-            else:
-                parent.begin()
-                nodes = nuke.allNodes(recurseGroups=False)
-                parent.end()
-        except:
-            nodes = []
-
-        for node in nodes:
-            # Skip source node
-            if node.name() == source_name:
-                continue
-
-            # Check if it's a Group-type node
-            node_class = node.Class()
-            if node_class in ('Group', 'Gizmo'):
-                # Check if it's a CompPass node (has comppass_tab knob)
-                if node.knob('comppass_tab'):
-                    self.comppass_nodes.append(node)
-                # Recurse into groups
-                try:
-                    self._find_comppass_nodes_recursive(node, source_name)
-                except:
-                    pass
 
     def _get_layer_count(self, node):
         """Get number of layers in a CompPass node."""
