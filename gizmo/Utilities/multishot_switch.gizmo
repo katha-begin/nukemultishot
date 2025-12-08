@@ -1,109 +1,187 @@
 # multishot_switch gizmo
-# Automatically selects input based on root.shot matching shot slots
-# Input 0 = main (default/fallback)
-# Input 1-5 = shotA through shotE
-# Tile color changes based on active input for visual feedback
+# Dynamic shot-based input routing
+# - Starts with 1 input (main/default)
+# - User clicks "Add Shot Input" to add more inputs
+# - Each input supports multiple shot names separated by comma
+# - If root.shot matches any shot name, routes to that input
 
-Gizmo {
+Group {
  name multishot_switch
- tile_color {{"\[expr \{\n    \[value Switch_main.which] == 0 ? 0x7f7f7fff :\n    \[value Switch_main.which] == 1 ? 0xff5555ff :\n    \[value Switch_main.which] == 2 ? 0x55cc55ff :\n    \[value Switch_main.which] == 3 ? 0x5588ffff :\n    \[value Switch_main.which] == 4 ? 0xffcc00ff :\n    \[value Switch_main.which] == 5 ? 0xcc55ffff : 0x7f7f7fff\n\}]"}}
+ tile_color 0x7f7f7fff
  note_font "Verdana Bold"
+
  addUserKnob {20 multishot_switch_tab l "Multishot Switch"}
-
- addUserKnob {26 info_text l "" +STARTLINE T "<b>Shot-based Input Routing</b>\nReads shot name from root.shot and switches to matching input.\nNode color changes based on active input."}
+ addUserKnob {26 info_text l "" +STARTLINE T "<b>Shot-based Input Routing</b>\nInput 0 = Default/Main (fallback)\nClick 'Add Shot Input' to create new inputs.\nEach input supports multiple shots (comma-separated)."}
  addUserKnob {26 divider1 l "" +STARTLINE}
- 
- addUserKnob {26 color_legend l "" +STARTLINE T "<font color='#7f7f7f'>■</font> Main (0)  <font color='#ff5555'>■</font> A (1)  <font color='#55cc55'>■</font> B (2)  <font color='#5588ff'>■</font> C (3)  <font color='#ffcc00'>■</font> D (4)  <font color='#cc55ff'>■</font> E (5)"}
- addUserKnob {26 divider_slots l "" +STARTLINE}
 
- addUserKnob {1 shotA l "<font color='#ff5555'>■</font> Shot A (Input 1)" t "Shot code for Input 1 - RED"}
- shotA ""
- addUserKnob {22 set_shotA l "Set from root.shot" t "Copy current root.shot value to Shot A" -STARTLINE T "n = nuke.thisNode()\ntry:\n    shot_value = nuke.root()\['shot'].value()\n    n\['shotA'].setValue(shot_value)\nexcept:\n    nuke.message('Could not read root.shot')"}
-
- addUserKnob {1 shotB l "<font color='#55cc55'>■</font> Shot B (Input 2)" t "Shot code for Input 2 - GREEN"}
- shotB ""
- addUserKnob {22 set_shotB l "Set from root.shot" t "Copy current root.shot value to Shot B" -STARTLINE T "n = nuke.thisNode()\ntry:\n    shot_value = nuke.root()\['shot'].value()\n    n\['shotB'].setValue(shot_value)\nexcept:\n    nuke.message('Could not read root.shot')"}
-
- addUserKnob {1 shotC l "<font color='#5588ff'>■</font> Shot C (Input 3)" t "Shot code for Input 3 - BLUE"}
- shotC ""
- addUserKnob {22 set_shotC l "Set from root.shot" t "Copy current root.shot value to Shot C" -STARTLINE T "n = nuke.thisNode()\ntry:\n    shot_value = nuke.root()\['shot'].value()\n    n\['shotC'].setValue(shot_value)\nexcept:\n    nuke.message('Could not read root.shot')"}
-
- addUserKnob {1 shotD l "<font color='#ffcc00'>■</font> Shot D (Input 4)" t "Shot code for Input 4 - YELLOW"}
- shotD ""
- addUserKnob {22 set_shotD l "Set from root.shot" t "Copy current root.shot value to Shot D" -STARTLINE T "n = nuke.thisNode()\ntry:\n    shot_value = nuke.root()\['shot'].value()\n    n\['shotD'].setValue(shot_value)\nexcept:\n    nuke.message('Could not read root.shot')"}
-
- addUserKnob {1 shotE l "<font color='#cc55ff'>■</font> Shot E (Input 5)" t "Shot code for Input 5 - PURPLE"}
- shotE ""
- addUserKnob {22 set_shotE l "Set from root.shot" t "Copy current root.shot value to Shot E" -STARTLINE T "n = nuke.thisNode()\ntry:\n    shot_value = nuke.root()\['shot'].value()\n    n\['shotE'].setValue(shot_value)\nexcept:\n    nuke.message('Could not read root.shot')"}
- 
- addUserKnob {26 divider2 l "" +STARTLINE}
- addUserKnob {22 clear_all l "Clear All Shots" t "Clear all shot slots" T "n = nuke.thisNode()\nfor slot in \['shotA', 'shotB', 'shotC', 'shotD', 'shotE']:\n    n\[slot].setValue('')"}
- 
- addUserKnob {26 divider3 l "" +STARTLINE}
- addUserKnob {26 status_label l "Current root.shot:" T ""}
+ addUserKnob {26 status_label l "root.shot:" T ""}
  addUserKnob {26 current_shot l "" +STARTLINE T "<b>\[value root.shot]</b>"}
- addUserKnob {26 active_input l "Active Input:" T ""}
- addUserKnob {26 active_input_num l "" +STARTLINE T "<b>\[value Switch_main.which]</b>"}
+ addUserKnob {26 divider2 l "" +STARTLINE}
+
+ addUserKnob {3 input_count l "Input Count" t "Number of shot inputs (excluding main)"}
+ input_count 0
+
+ addUserKnob {22 add_input_btn l "Add Shot Input" t "Add a new shot input with shot name field" T "exec('''
+import nuke
+
+node = nuke.thisNode()
+count = int(node\['input_count'].value()) + 1
+node\['input_count'].setValue(count)
+
+# Colors for inputs
+colors = \['#ff5555', '#55cc55', '#5588ff', '#ffcc00', '#cc55ff', '#55ffff', '#ff55ff', '#ffaa55'\]
+color = colors\[(count - 1) % len(colors)\]
+
+# Add shot name knob
+shot_knob = nuke.String_Knob('shot_input_%d' % count, '<font color=\"%s\">Input %d</font>' % (color, count))
+shot_knob.setTooltip('Shot names for Input %d (comma-separated, e.g. SH010, SH020, SH030)' % count)
+node.addKnob(shot_knob)
+
+# Add \"Set from root.shot\" button
+set_btn = nuke.PyScript_Knob('set_shot_%d' % count, 'Set from root.shot')
+set_btn.setFlag(nuke.STARTLINE, False)
+set_btn.setTooltip('Add current root.shot to this input')
+set_btn.setValue(\"\"\"
+n = nuke.thisNode()
+knob = n['shot_input_%d']
+current = knob.value().strip()
+try:
+    shot = nuke.root()['shot'].value()
+    if current:
+        # Append if not already there
+        shots = [s.strip() for s in current.split(',')]
+        if shot not in shots:
+            shots.append(shot)
+            knob.setValue(', '.join(shots))
+    else:
+        knob.setValue(shot)
+except:
+    nuke.message('Could not read root.shot')
+\"\"\" % count)
+node.addKnob(set_btn)
+
+# Add Input node inside group
+node.begin()
+input_node = nuke.createNode('Input', inpanel=False)
+input_node['name'].setValue('Input%d' % count)
+input_node.setXpos(count * 150)
+input_node.setYpos(-200)
+node.end()
+
+# Update switch
+node.knob('update_switch_btn').execute()
+
+nuke.message('Added Input %d. Connect your shot comp to the new input arrow.' % count)
+''')"}
+
+ addUserKnob {22 update_switch_btn l "Update Switch" t "Rebuild internal switch based on current inputs" T "exec('''
+import nuke
+
+node = nuke.thisNode()
+count = int(node\['input_count'].value())
+
+node.begin()
+
+# Find or create switch
+switch = None
+for n in nuke.allNodes('Switch'):
+    if n.name() == 'ShotSwitch':
+        switch = n
+        break
+
+if not switch:
+    switch = nuke.createNode('Switch', inpanel=False)
+    switch['name'].setValue('ShotSwitch')
+    switch.setXpos(0)
+    switch.setYpos(-50)
+
+# Connect inputs to switch
+# Input 0 is main/default
+main_input = nuke.toNode('Input0')
+if main_input:
+    switch.setInput(0, main_input)
+
+for i in range(1, count + 1):
+    inp = nuke.toNode('Input%d' % i)
+    if inp:
+        switch.setInput(i, inp)
+
+# Set switch expression
+if count > 0:
+    # Build Python expression for matching
+    expr_lines = \['# Auto-generated switch expression'\]
+    expr_lines.append('ret = 0')
+    expr_lines.append('try:')
+    expr_lines.append('    shot = nuke.root()[\"shot\"].value()')
+    for i in range(1, count + 1):
+        expr_lines.append('    shots_%d = [s.strip() for s in nuke.thisParent()[\"shot_input_%d\"].value().split(\",\") if s.strip()]' % (i, i))
+        expr_lines.append('    if shot in shots_%d: ret = %d' % (i, i))
+    expr_lines.append('except: pass')
+    expr_lines.append('ret')
+
+    switch['which'].setExpression('\\n'.join(expr_lines), 'python')
+else:
+    switch['which'].setValue(0)
+    switch['which'].clearAnimated()
+
+# Connect switch to output
+output = nuke.toNode('Output1')
+if output:
+    output.setInput(0, switch)
+
+node.end()
+''')"}
+
+ addUserKnob {26 divider3 l "" +STARTLINE}
+ addUserKnob {22 remove_last_btn l "Remove Last Input" t "Remove the last shot input" T "exec('''
+import nuke
+
+node = nuke.thisNode()
+count = int(node\['input_count'].value())
+
+if count <= 0:
+    nuke.message('No shot inputs to remove.')
+else:
+    # Remove knobs
+    try:
+        node.removeKnob(node\['shot_input_%d' % count\])
+    except: pass
+    try:
+        node.removeKnob(node\['set_shot_%d' % count\])
+    except: pass
+
+    # Remove input node
+    node.begin()
+    inp = nuke.toNode('Input%d' % count)
+    if inp:
+        nuke.delete(inp)
+    node.end()
+
+    node\['input_count'\].setValue(count - 1)
+
+    # Update switch
+    node.knob('update_switch_btn').execute()
+''')"}
 }
 
  Input {
   inputs 0
-  name main
+  name Input0
   label "main (default)"
   xpos 0
   ypos -200
  }
- Input {
-  inputs 0
-  name shotA_input
-  label "shotA"
-  xpos 150
-  ypos -200
-  number 1
- }
- Input {
-  inputs 0
-  name shotB_input
-  label "shotB"
-  xpos 300
-  ypos -200
-  number 2
- }
- Input {
-  inputs 0
-  name shotC_input
-  label "shotC"
-  xpos 450
-  ypos -200
-  number 3
- }
- Input {
-  inputs 0
-  name shotD_input
-  label "shotD"
-  xpos 600
-  ypos -200
-  number 4
- }
- Input {
-  inputs 0
-  name shotE_input
-  label "shotE"
-  xpos 750
-  ypos -200
-  number 5
- }
  Switch {
-  inputs 6
-  which {{"\[expr \{\n    \[string equal \[value root.shot] \[value parent.shotA]] ? 1 :\n    \[string equal \[value root.shot] \[value parent.shotB]] ? 2 :\n    \[string equal \[value root.shot] \[value parent.shotC]] ? 3 :\n    \[string equal \[value root.shot] \[value parent.shotD]] ? 4 :\n    \[string equal \[value root.shot] \[value parent.shotE]] ? 5 : 0\n\}]"}}
-  name Switch_main
+  inputs 1
+  which 0
+  name ShotSwitch
   xpos 0
-  ypos -100
+  ypos -50
  }
  Output {
   name Output1
   xpos 0
-  ypos 0
+  ypos 50
  }
 end_group
 
