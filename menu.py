@@ -126,6 +126,12 @@ try:
                 'nuke.createNode("multishot_switch")',
                 tooltip='Create a Multishot Switch gizmo - routes inputs based on root.shot'
             )
+
+            multishot_nodes.addCommand(
+                'CompPass',
+                'import multishot.nodes.comppass_node; multishot.nodes.comppass_node.create_comppass_node()',
+                tooltip='Create AOV/LightGroup compositor with per-layer exposure and gain controls'
+            )
             
             logger.info("Multishot nodes menu setup completed")
             

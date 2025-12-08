@@ -8,6 +8,7 @@ Nodes:
 - MultishotRead: Variable-driven Read node
 - MultishotWrite: Variable-driven Write node
 - multishot_switch: Gizmo for shot-based input routing (see gizmo/Utilities/)
+- CompPass: AOV/LightGroup compositing controller
 """
 
 # Import custom nodes
@@ -15,6 +16,7 @@ from .read_node import MultishotRead, create_multishot_read
 from .write_node import MultishotWrite, create_multishot_write
 from .write_gizmo import MultishotWriteGizmo, create_multishot_write_gizmo
 from .switch_node import create_multishot_switch  # Gizmo-based now
+from .comppass_node import create_comppass_node
 from .base_node import BaseMultishotNode
 
 def register_all_nodes():
@@ -28,6 +30,8 @@ def register_all_nodes():
         nuke.menu('Nodes').addCommand('Multishot/Write Gizmo', 'multishot.nodes.create_multishot_write_gizmo()')
         # Switch is now a gizmo - registered via gizmo_loader
         nuke.menu('Nodes').addCommand('Multishot/Switch', 'nuke.createNode("multishot_switch")')
+        # CompPass - AOV compositor
+        nuke.menu('Nodes').addCommand('Multishot/CompPass', 'multishot.nodes.create_comppass_node()')
 
         print("Multishot custom nodes registered successfully")
 
@@ -46,5 +50,6 @@ __all__ = [
     'create_multishot_read',
     'create_multishot_write',
     'create_multishot_write_gizmo',
-    'create_multishot_switch'
+    'create_multishot_switch',
+    'create_comppass_node'
 ]
