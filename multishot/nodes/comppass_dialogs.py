@@ -216,7 +216,15 @@ class MirrorDialog(QDialog):
         deselect_btn = QPushButton("Deselect All")
         deselect_btn.clicked.connect(self.deselect_all)
         sel_row.addWidget(deselect_btn)
+
         sel_row.addStretch()
+
+        # Refresh button to re-detect nodes
+        refresh_btn = QPushButton("🔄 Refresh")
+        refresh_btn.setToolTip("Re-detect CompPass nodes in the scene")
+        refresh_btn.clicked.connect(self.load_data)
+        sel_row.addWidget(refresh_btn)
+
         target_layout.addLayout(sel_row)
 
         layout.addWidget(target_group)
