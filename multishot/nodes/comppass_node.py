@@ -652,12 +652,13 @@ def mirror_settings(source_node, target_nodes, mirror_exposure=True, mirror_gain
 
                 clean_layer = clean_layer_name(layer)
 
-                # Mirror Exposure
+                # Mirror Exposure (knob name is 'exp_', not 'exposure_')
                 if mirror_exposure:
-                    src_knob = f'exposure_{clean_layer}'
+                    src_knob = f'exp_{clean_layer}'
                     if source_node.knob(src_knob) and target.knob(src_knob):
                         target[src_knob].setValue(source_node[src_knob].value())
                         mirrored_any = True
+                        logger.debug(f"Mirrored {src_knob}: {source_node[src_knob].value()}")
 
                 # Mirror Gain/Color
                 if mirror_gain:
@@ -665,6 +666,7 @@ def mirror_settings(source_node, target_nodes, mirror_exposure=True, mirror_gain
                     if source_node.knob(src_knob) and target.knob(src_knob):
                         target[src_knob].setValue(source_node[src_knob].value())
                         mirrored_any = True
+                        logger.debug(f"Mirrored {src_knob}: {source_node[src_knob].value()}")
 
                 # Mirror Enable
                 if mirror_enable:
@@ -672,6 +674,7 @@ def mirror_settings(source_node, target_nodes, mirror_exposure=True, mirror_gain
                     if source_node.knob(src_knob) and target.knob(src_knob):
                         target[src_knob].setValue(source_node[src_knob].value())
                         mirrored_any = True
+                        logger.debug(f"Mirrored {src_knob}: {source_node[src_knob].value()}")
 
             if mirrored_any:
                 success_count += 1
