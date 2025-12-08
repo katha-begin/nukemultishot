@@ -264,18 +264,28 @@ class MirrorDialog(QDialog):
             f"<b>{source_name}</b> | Namespace: <b>{source_ns}</b> | Layers: {source_layers}"
         )
 
-        # Find all CompPass nodes (Group nodes with 'namespace' knob)
+        # Find all CompPass nodes
+        # CompPass nodes are identified by having 'comppass_tab' knob or 'selected_layers' knob
         self.comppass_nodes = []
         for node in nuke.allNodes('Group'):
             if node.name() == source_name:
-                continue  # Skip source
-            if node.knob('namespace') and node.knob('selected_layers'):
+                continue  # Skip source node
+            # Check if it's a CompPass node (has comppass_tab or selected_layers knob)
+            if node.knob('comppass_tab') or node.knob('selected_layers'):
                 self.comppass_nodes.append(node)
 
         # Populate table
         self.table.setRowCount(len(self.comppass_nodes))
         for i, node in enumerate(self.comppass_nodes):
             self._add_node_row(i, node, source_ns)
+
+        # Show message if no other CompPass nodes found
+        if not self.comppass_nodes:
+            self.table.setRowCount(1)
+            no_nodes_item = QTableWidgetItem("No other CompPass nodes found in script")
+            no_nodes_item.setFlags(no_nodes_item.flags() & ~Qt.ItemIsEditable)
+            self.table.setItem(0, 1, no_nodes_item)
+            self.table.setSpan(0, 1, 1, 3)
 
     def _get_layer_count(self, node):
         """Get number of layers in a CompPass node."""
