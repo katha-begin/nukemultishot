@@ -59,12 +59,16 @@ class MultishotManagerDialog(BaseWidget):
     def _setup_ui(self):
         """Setup the user interface."""
         layout = QtWidgets.QVBoxLayout(self)
+        # Reduce margins for better docked panel appearance
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(4)
 
         # Header
         header_layout = QtWidgets.QHBoxLayout()
+        header_layout.setSpacing(4)
 
         title_label = QtWidgets.QLabel("Multishot Manager")
-        title_label.setStyleSheet("font-size: 16px; font-weight: bold; margin: 10px;")
+        title_label.setStyleSheet("font-size: 14px; font-weight: bold;")
         header_layout.addWidget(title_label)
 
         header_layout.addStretch()
@@ -79,11 +83,11 @@ class MultishotManagerDialog(BaseWidget):
         # Current shot display
         current_shot_layout = QtWidgets.QHBoxLayout()
         current_shot_layout.addWidget(QtWidgets.QLabel("Current Shot:"))
-        
+
         self.current_shot_label = QtWidgets.QLabel("None")
         self.current_shot_label.setStyleSheet("font-weight: bold; color: green;")
         current_shot_layout.addWidget(self.current_shot_label)
-        
+
         current_shot_layout.addStretch()
         layout.addLayout(current_shot_layout)
 
@@ -111,10 +115,17 @@ class MultishotManagerDialog(BaseWidget):
         header.resizeSection(8, 80)   # Save
         header.resizeSection(9, 80)   # Render
 
+        # Set size policy for proper docking behavior
+        self.shots_table.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding,
+            QtWidgets.QSizePolicy.Expanding
+        )
+
         layout.addWidget(self.shots_table)
 
         # Bottom buttons
         bottom_layout = QtWidgets.QHBoxLayout()
+        bottom_layout.setSpacing(4)
 
         self.add_shots_btn = QtWidgets.QPushButton("Add Shots")
         self.add_shots_btn.setToolTip("Add shots from directory structure")
@@ -130,6 +141,12 @@ class MultishotManagerDialog(BaseWidget):
         bottom_layout.addWidget(self.contact_sheet_btn)
 
         layout.addLayout(bottom_layout)
+
+        # Set overall size policy for proper docking behavior
+        self.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding,
+            QtWidgets.QSizePolicy.Expanding
+        )
 
     def _connect_signals(self):
         """Connect UI signals."""

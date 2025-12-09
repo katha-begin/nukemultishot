@@ -96,56 +96,162 @@ def get_nuke_main_window():
 def create_nuke_panel(widget, title: str = "Multishot Panel", width: int = 400, height: int = 600):
     """
     Create a Nuke panel containing the specified widget.
-    
+
     Args:
         widget: Qt widget to embed in the panel
         title: Panel title
         width: Panel width
         height: Panel height
-    
+
     Returns:
         Nuke panel object or the widget itself if not in Nuke
     """
     if not is_nuke_available():
         # Not in Nuke - show as standalone dialog
         QtCore, QtWidgets, QtGui, Signal, Slot = get_qt_modules()
-        
+
         dialog = QtWidgets.QDialog()
         dialog.setWindowTitle(title)
         dialog.resize(width, height)
-        
+
         layout = QtWidgets.QVBoxLayout()
         layout.addWidget(widget)
         dialog.setLayout(layout)
-        
+
         return dialog
-    
+
     try:
         import nukescripts
-        
+
         # Create Nuke panel
         panel = nukescripts.PythonPanel(title)
         panel.setMinimumSize(width, height)
-        
+
         # Add widget to panel
         panel.addKnob(nukescripts.PythonPanel.PythonCustomKnob(widget, title))
-        
+
         return panel
-        
+
     except Exception as e:
         logger.error(f"Error creating Nuke panel: {e}")
         # Fallback to regular dialog
         QtCore, QtWidgets, QtGui, Signal, Slot = get_qt_modules()
-        
+
         dialog = QtWidgets.QDialog(get_nuke_main_window())
         dialog.setWindowTitle(title)
         dialog.resize(width, height)
-        
+
         layout = QtWidgets.QVBoxLayout()
         layout.addWidget(widget)
         dialog.setLayout(layout)
-        
+
         return dialog
+
+
+def register_dockable_panel(widget_class: str, name: str, panel_id: str, create: bool = False):
+    """
+    Register a widget class as a dockable Nuke panel.
+
+    This uses nukescripts.panels.registerWidgetAsPanel to make the widget
+    available in the Pane menu and allow it to be docked anywhere in Nuke's UI.
+
+    Args:
+        widget_class: Full Python path to the widget class (e.g., 'multishot.ui.multishot_manager.MultishotManagerDialog')
+        name: Display name in the Pane menu
+        panel_id: Unique identifier for the panel (e.g., 'com.multishot.MultishotManager')
+        create: If True, returns a new panel instance wrapping the widget
+
+    Returns:
+        If create=True, returns a PythonPanel wrapping the widget.
+        Otherwise returns None.
+    """
+    if not is_nuke_available():
+        logger.warning("Cannot register dockable panel outside of Nuke")
+        return None
+
+    try:
+        from nukescripts import panels
+
+        result = panels.registerWidgetAsPanel(widget_class, name, panel_id, create)
+        logger.info(f"Registered dockable panel: {name} ({panel_id})")
+        return result
+
+    except Exception as e:
+        logger.error(f"Error registering dockable panel {name}: {e}")
+        return None
+
+
+def show_panel_in_pane(widget_class: str, name: str, panel_id: str, pane_name: str = 'Properties.1'):
+    """
+    Show a registered panel in a specific pane, or create floating if pane not found.
+
+    Args:
+        widget_class: Full Python path to the widget class
+        name: Display name for the panel
+        panel_id: Unique identifier for the panel
+        pane_name: Name of the pane to dock into (e.g., 'Properties.1', 'DAG.1')
+
+    Returns:
+        The panel instance
+    """
+    if not is_nuke_available():
+        logger.warning("Cannot show panel outside of Nuke")
+        return None
+
+    try:
+        import nuke
+        from nukescripts import panels
+
+        # Get the target pane
+        pane = nuke.getPaneFor(pane_name)
+
+        # Register and create the panel
+        panel = panels.registerWidgetAsPanel(widget_class, name, panel_id, True)
+
+        if pane:
+            panel.addToPane(pane)
+            logger.info(f"Added panel {name} to pane {pane_name}")
+        else:
+            # Show as floating window
+            panel.show()
+            logger.info(f"Showing panel {name} as floating (pane {pane_name} not found)")
+
+        return panel
+
+    except Exception as e:
+        logger.error(f"Error showing panel {name}: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
+def find_existing_panel(panel_id: str):
+    """
+    Find an existing instance of a dockable panel by its ID.
+
+    Args:
+        panel_id: Unique identifier for the panel
+
+    Returns:
+        The widget if found, None otherwise
+    """
+    if not is_nuke_available():
+        return None
+
+    try:
+        QtCore, QtWidgets, QtGui, Signal, Slot = get_qt_modules()
+
+        main_window = get_nuke_main_window()
+        if main_window:
+            # Search for widgets with the panel ID as object name
+            widgets = main_window.findChildren(QtWidgets.QWidget, panel_id)
+            if widgets:
+                return widgets[0]
+
+    except Exception as e:
+        logger.error(f"Error finding panel {panel_id}: {e}")
+
+    return None
 
 def create_base_widget_class():
     """Create BaseWidget class dynamically to handle Qt import issues."""
