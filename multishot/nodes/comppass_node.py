@@ -340,13 +340,103 @@ def _remove_layer_knobs(group):
             pass
 
 
+def _save_layer_values(group):
+    """Save current layer control values (exposure, gain, enable) before rebuild.
+
+    Scans ALL existing knobs to find layer controls, rather than relying on
+    selected_layers text (which may already have new layers added).
+    """
+    saved_values = {}
+
+    # Scan all knobs to find existing layer controls by pattern
+    # We look for 'exp_*' knobs to identify layers, then save all related values
+    for knob in group.knobs().values():
+        knob_name = knob.name()
+
+        # Find exposure knobs (exp_{layer_name})
+        if knob_name.startswith('exp_'):
+            clean_layer = knob_name[4:]  # Remove 'exp_' prefix
+
+            layer_values = {}
+
+            # Save exposure
+            layer_values['exposure'] = knob.value()
+
+            # Save gain (Color_Knob returns list)
+            gain_knob = group.knob(f'gain_{clean_layer}')
+            if gain_knob:
+                layer_values['gain'] = gain_knob.value()
+
+            # Save enable
+            enable_knob = group.knob(f'enable_{clean_layer}')
+            if enable_knob:
+                layer_values['enable'] = enable_knob.value()
+
+            # Save view
+            view_knob = group.knob(f'view_{clean_layer}')
+            if view_knob:
+                layer_values['view'] = view_knob.value()
+
+            # Store by clean_layer name (the key used for knobs)
+            saved_values[clean_layer] = layer_values
+
+    logger.debug(f"Saved values for {len(saved_values)} layers: {list(saved_values.keys())}")
+    return saved_values
+
+
+def _restore_layer_values(group, saved_values):
+    """Restore layer control values after rebuild.
+
+    saved_values keys are clean_layer names (same format as knob names).
+    """
+    if not saved_values:
+        return
+
+    restored_count = 0
+    for clean_layer, values in saved_values.items():
+        # Restore exposure
+        if 'exposure' in values:
+            exp_knob = group.knob(f'exp_{clean_layer}')
+            if exp_knob:
+                exp_knob.setValue(values['exposure'])
+                logger.debug(f"Restored exp_{clean_layer} = {values['exposure']}")
+
+        # Restore gain
+        if 'gain' in values:
+            gain_knob = group.knob(f'gain_{clean_layer}')
+            if gain_knob:
+                gain_knob.setValue(values['gain'])
+                logger.debug(f"Restored gain_{clean_layer} = {values['gain']}")
+
+        # Restore enable
+        if 'enable' in values:
+            enable_knob = group.knob(f'enable_{clean_layer}')
+            if enable_knob:
+                enable_knob.setValue(values['enable'])
+                logger.debug(f"Restored enable_{clean_layer} = {values['enable']}")
+
+        # Restore view
+        if 'view' in values:
+            view_knob = group.knob(f'view_{clean_layer}')
+            if view_knob:
+                view_knob.setValue(values['view'])
+
+        restored_count += 1
+
+    logger.debug(f"Restored values for {restored_count} layers")
+
+
 def rebuild_network_callback(group):
-    """Clear and rebuild the network."""
+    """Clear and rebuild the network, preserving layer values."""
+    # Save current values before clearing
+    saved_values = _save_layer_values(group)
+
+    # Clear and rebuild
     clear_network_callback(group)
-    build_network_callback(group)
+    build_network_callback(group, saved_values=saved_values)
 
 
-def build_network_callback(group):
+def build_network_callback(group, saved_values=None):
     """Build the AOV compositing network for selected layers."""
     import nuke
 
@@ -363,6 +453,10 @@ def build_network_callback(group):
             group['status'].setValue('<font color="orange">Select at least one layer</font>')
             return
 
+        # Save values if not provided (for first-time build, save before clear)
+        if saved_values is None:
+            saved_values = _save_layer_values(group)
+
         # Clear existing network first
         clear_network_callback(group)
 
@@ -374,6 +468,10 @@ def build_network_callback(group):
 
         # Link knobs to internal nodes
         _link_knobs_to_nodes(group, layers)
+
+        # Restore saved values for layers that still exist
+        if saved_values:
+            _restore_layer_values(group, saved_values)
 
         group['status'].setValue(f'<font color="green">Built network with {len(layers)} layers</font>')
 
