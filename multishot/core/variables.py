@@ -754,8 +754,11 @@ except Exception as e:
         """
         Auto-detect context from current script filename during initialization.
 
+        IMPORTANT: Only auto-detects if context is NOT already stored in script.
+        This preserves the active shot set by Multishot Manager.
+
         This is called during VariableManager initialization to ensure the version
-        variable matches the script's actual version number.
+        variable matches the script's actual version number for NEW scripts.
         """
         try:
             import nuke
@@ -766,17 +769,40 @@ except Exception as e:
                 self.logger.debug("No script loaded yet, skipping auto-detect context")
                 return
 
-            # Use context detector to parse filename
+            # CRITICAL: Check if context already exists in script
+            # If user has set an active shot in Multishot Manager, we must preserve it!
+            existing_context = self.get_context_variables()
+
+            # Check if we have a complete context (project, ep, seq, shot)
+            has_complete_context = all(
+                existing_context.get(key)
+                for key in ['project', 'ep', 'seq', 'shot']
+            )
+
+            if has_complete_context:
+                # Context already exists - DO NOT overwrite with filename!
+                # Only update version if it's missing
+                if not existing_context.get('version'):
+                    from .context import ContextDetector
+                    detector = ContextDetector()
+                    detected = detector.detect_from_filepath(script_name)
+                    if detected and detected.get('version'):
+                        existing_context['version'] = detected['version']
+                        self.set_context_variables(existing_context)
+                        self.logger.info(f"Updated version from filename: {detected['version']}")
+                else:
+                    self.logger.debug(f"Context already exists in script, preserving it: {existing_context}")
+                return
+
+            # No complete context exists - auto-detect from filename
             from .context import ContextDetector
             detector = ContextDetector()
             context = detector.detect_from_filepath(script_name)
 
             if context:
-                # Only update context variables that were detected
-                # Don't overwrite existing values with empty ones
-                existing_context = self.get_context_variables()
+                # Merge with existing context (preserve any existing values)
                 for key, value in context.items():
-                    if value:  # Only set non-empty values
+                    if value and not existing_context.get(key):  # Only set if not already set
                         existing_context[key] = value
 
                 self.set_context_variables(existing_context)

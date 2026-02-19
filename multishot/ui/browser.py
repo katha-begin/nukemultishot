@@ -400,20 +400,36 @@ class MultishotBrowser(BaseWidget):
     def load_initial_data(self):
         """Load initial data and setup default state."""
         try:
-            # ✅ PHASE 3: Try to detect current script path first
-            script_path = self._get_current_script_path()
-            if script_path:
-                self.logger.info(f"Detected current script: {script_path}")
-                # Try to extract context from script path
-                detected_context = self._detect_context_from_path(script_path)
-                if detected_context:
-                    self._current_context = detected_context
-                    self.logger.info(f"Detected context from script path: {self._current_context}")
+            # CRITICAL: Read context from root knobs FIRST (preserves active shot from Multishot Manager)
+            # DO NOT detect from path first - that would overwrite the user's active shot selection!
+            self._current_context = self._read_context_from_root_knobs()
 
-            # If no script path or detection failed, read from root knobs
-            if not self._current_context or not self._current_context.get('project'):
-                self._current_context = self._read_context_from_root_knobs()
-                self.logger.info(f"Read context from root knobs: {self._current_context}")
+            # Check if we have a complete context from root knobs
+            has_complete_context = (
+                self._current_context and
+                self._current_context.get('project') and
+                self._current_context.get('ep') and
+                self._current_context.get('seq') and
+                self._current_context.get('shot')
+            )
+
+            if has_complete_context:
+                # We have a complete context from root knobs - use it!
+                self.logger.info(f"Using context from root knobs (active shot): {self._current_context}")
+            else:
+                # No complete context in root knobs - try to detect from script path
+                script_path = self._get_current_script_path()
+                if script_path:
+                    self.logger.info(f"Detected current script: {script_path}")
+                    detected_context = self._detect_context_from_path(script_path)
+                    if detected_context:
+                        # Merge detected context with existing (don't overwrite existing values)
+                        for key, value in detected_context.items():
+                            if value and not self._current_context.get(key):
+                                self._current_context[key] = value
+                        self.logger.info(f"Merged context from script path: {self._current_context}")
+                else:
+                    self.logger.info(f"No script path detected, using context from root knobs: {self._current_context}")
 
             # Fill in defaults only for missing values
             if not self._current_context.get('project'):
