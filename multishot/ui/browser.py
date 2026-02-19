@@ -1377,6 +1377,10 @@ class MultishotBrowser(BaseWidget):
                     nuke.scriptSaveAs(filepath)
                     self.show_info("Version Saved", f"Saved as {next_version}: {filename}")
 
+                    # Update version variable to match new filename
+                    self.variable_manager.set_variable('version', next_version)
+                    self.logger.info(f"Updated version variable to: {next_version}")
+
                     # Refresh file lists
                     self.update_file_lists()
 

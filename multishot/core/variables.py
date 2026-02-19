@@ -46,6 +46,10 @@ class VariableManager:
                 self.logger.info("VariableManager initialized with Nuke integration")
                 self._ensure_knobs_exist()
                 self._ensure_root_variables_in_script()
+
+                # Auto-detect context (including version) from current script filename
+                # This ensures version variable matches the script's actual version
+                self._auto_detect_context_from_script()
         else:
             self.logger.info("VariableManager initialized in standalone mode")
 
@@ -746,6 +750,43 @@ except Exception as e:
             return True
 
         return False
+
+    def _auto_detect_context_from_script(self):
+        """
+        Auto-detect context from current script filename during initialization.
+
+        This is called during VariableManager initialization to ensure the version
+        variable matches the script's actual version number.
+        """
+        try:
+            import nuke
+            script_name = nuke.root().name()
+
+            # Only auto-detect if a real script is loaded (not "Root" or empty)
+            if not script_name or script_name == "Root":
+                self.logger.debug("No script loaded yet, skipping auto-detect context")
+                return
+
+            # Use context detector to parse filename
+            from .context import ContextDetector
+            detector = ContextDetector()
+            context = detector.detect_from_filepath(script_name)
+
+            if context:
+                # Only update context variables that were detected
+                # Don't overwrite existing values with empty ones
+                existing_context = self.get_context_variables()
+                for key, value in context.items():
+                    if value:  # Only set non-empty values
+                        existing_context[key] = value
+
+                self.set_context_variables(existing_context)
+                self.logger.info(f"Auto-detected context from {script_name}: {context}")
+            else:
+                self.logger.debug(f"Could not auto-detect context from {script_name}")
+
+        except Exception as e:
+            self.logger.debug(f"Error in auto-detect context (non-critical): {e}")
 
     def refresh_context(self) -> bool:
         """
