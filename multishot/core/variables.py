@@ -682,6 +682,19 @@ except Exception as e:
                 self.logger.info(f"Set custom variables: {variables}")
                 self._cached_variables = None  # Clear cache
 
+                # CRITICAL FIX: Also update individual knobs for PROJ_ROOT and IMG_ROOT
+                # This ensures the individual knobs (source of truth) stay in sync with JSON
+                if self._nuke_available:
+                    try:
+                        import nuke
+                        root = nuke.root()
+                        for key in ['PROJ_ROOT', 'IMG_ROOT']:
+                            if key in variables and root.knob(key):
+                                root[key].setValue(str(variables[key]))
+                                self.logger.debug(f"Synced individual knob {key} = {variables[key]}")
+                    except Exception as e:
+                        self.logger.error(f"Error syncing individual knobs: {e}")
+
             return success
 
         except Exception as e:
@@ -723,7 +736,21 @@ except Exception as e:
         else:
             custom_vars = self.get_custom_variables()
             custom_vars[key] = value
-            return self.set_custom_variables(custom_vars)
+            success = self.set_custom_variables(custom_vars)
+
+            # CRITICAL FIX: Also update individual knob for PROJ_ROOT and IMG_ROOT
+            # This ensures the individual knob (source of truth) stays in sync with JSON
+            if success and key in ['PROJ_ROOT', 'IMG_ROOT'] and self._nuke_available:
+                try:
+                    import nuke
+                    root = nuke.root()
+                    if root.knob(key):
+                        root[key].setValue(str(value))
+                        self.logger.debug(f"Updated individual knob {key} = {value}")
+                except Exception as e:
+                    self.logger.error(f"Error updating individual knob {key}: {e}")
+
+            return success
 
     def remove_variable(self, key: str) -> bool:
         """
