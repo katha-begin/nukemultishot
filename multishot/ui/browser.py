@@ -398,76 +398,28 @@ class MultishotBrowser(BaseWidget):
         self.file_tabs.currentChanged.connect(self.on_tab_changed)
 
     def load_initial_data(self):
-        """Load initial data and setup default state."""
+        """
+        Load initial data and setup default state.
+
+        IMPORTANT: Browser is READ-ONLY for context variables!
+        - It ONLY reads context from VariableManager for UI display
+        - It does NOT modify any stored context values
+        - Only Multishot Manager can set/modify context
+        """
         try:
-            # CRITICAL: Read context from root knobs FIRST (preserves active shot from Multishot Manager)
-            # DO NOT detect from path first - that would overwrite the user's active shot selection!
-            self._current_context = self._read_context_from_root_knobs()
-
-            # Check if we have a complete context from root knobs
-            has_complete_context = (
-                self._current_context and
-                self._current_context.get('project') and
-                self._current_context.get('ep') and
-                self._current_context.get('seq') and
-                self._current_context.get('shot')
-            )
-
-            if has_complete_context:
-                # We have a complete context from root knobs - use it!
-                self.logger.info(f"Using context from root knobs (active shot): {self._current_context}")
-            else:
-                # No complete context in root knobs - try to detect from script path
-                script_path = self._get_current_script_path()
-                if script_path:
-                    self.logger.info(f"Detected current script: {script_path}")
-                    detected_context = self._detect_context_from_path(script_path)
-                    if detected_context:
-                        # Merge detected context with existing (don't overwrite existing values)
-                        for key, value in detected_context.items():
-                            if value and not self._current_context.get(key):
-                                self._current_context[key] = value
-                        self.logger.info(f"Merged context from script path: {self._current_context}")
-                else:
-                    self.logger.info(f"No script path detected, using context from root knobs: {self._current_context}")
-
-            # Fill in defaults only for missing values
-            if not self._current_context.get('project'):
-                self._current_context['project'] = 'SWA'
-            if not self._current_context.get('ep'):
-                self._current_context['ep'] = ''
-            if not self._current_context.get('seq'):
-                self._current_context['seq'] = ''
-            if not self._current_context.get('shot'):
-                self._current_context['shot'] = ''
-
-            # Load project config to get root variables
-            try:
-                # Try to load SWA config
-                config = self.variable_manager.config_manager.load_project_config("", "SWA")
-                self.logger.debug(f"Loaded config with roots: {config.get('roots', {})}")
-            except Exception as e:
-                self.logger.warning(f"Could not load project config: {e}")
-
-            # DO NOT set default root variables here!
-            # The VariableManager already handles initial population from config in _ensure_root_variables_in_script()
-            # If we set them here, we'll overwrite any existing script-embedded values (e.g., Linux paths)
-            # Just log what we have
-            all_vars = self.variable_manager.get_all_variables()
-            proj_root = all_vars.get("PROJ_ROOT", "")
-            img_root = all_vars.get("IMG_ROOT", "")
-            self.logger.debug(f"Current root variables: PROJ_ROOT={proj_root}, IMG_ROOT={img_root}")
-
-            # Load current context from variable manager
+            # Read current context from VariableManager (READ-ONLY)
+            # This gets the context that was set by Multishot Manager or auto-detected by VariableManager
             self.refresh_context_from_variables()
+
+            self.logger.info(f"Browser loaded context (read-only): {self._current_context}")
 
             # Load project list
             self.load_projects()
 
-            # Update UI
+            # Update UI to reflect current context
             self.update_ui_from_context()
 
-            # ✅ PHASE 3: Update context details display
+            # Update context details display
             self._update_context_details()
 
             # Force initial project selection if none selected
@@ -478,40 +430,6 @@ class MultishotBrowser(BaseWidget):
         except Exception as e:
             self.logger.error(f"Error loading initial data: {e}")
             self.show_error("Initialization Error", f"Failed to load initial data: {e}")
-
-    def _read_context_from_root_knobs(self):
-        """Read current context from Nuke root knobs.
-
-        Returns:
-            Dictionary with context values from root knobs
-        """
-        try:
-            import nuke
-
-            context = {}
-            knob_mapping = {
-                'project': 'multishot_project',
-                'ep': 'multishot_ep',
-                'seq': 'multishot_seq',
-                'shot': 'multishot_shot'
-            }
-
-            for context_key, knob_name in knob_mapping.items():
-                if nuke.root().knob(knob_name):
-                    value = str(nuke.root()[knob_name].value()).strip()
-                    context[context_key] = value
-                else:
-                    context[context_key] = ''
-
-            self.logger.debug(f"Read context from root knobs: {context}")
-            return context
-
-        except ImportError:
-            self.logger.warning("Nuke not available, cannot read context from root knobs")
-            return {'project': '', 'ep': '', 'seq': '', 'shot': ''}
-        except Exception as e:
-            self.logger.error(f"Error reading context from root knobs: {e}")
-            return {'project': '', 'ep': '', 'seq': '', 'shot': ''}
 
     def refresh_context_from_variables(self):
         """Refresh context from current variables."""
@@ -560,14 +478,12 @@ class MultishotBrowser(BaseWidget):
             self.project_combo.clear()
             self.project_combo.addItems(sorted(projects))
 
-            # Set current project if available
+            # Set current project in UI if available (READ-ONLY - don't modify context)
             current_project = self._current_context.get('project', '')
             if current_project and current_project in projects:
                 self.project_combo.setCurrentText(current_project)
-                self._current_context['project'] = current_project
             elif projects:
                 self.project_combo.setCurrentText(projects[0])
-                self._current_context['project'] = projects[0]
 
             self._updating_ui = False
 
@@ -2353,45 +2269,6 @@ class MultishotBrowser(BaseWidget):
             return None
         except Exception as e:
             self.logger.error(f"Error getting current script path: {e}")
-            return None
-
-    def _detect_context_from_path(self, filepath: str) -> Optional[Dict[str, str]]:
-        """
-        Detect multishot context from a file path.
-
-        Expected path format:
-        V:/SWA/all/scene/Ep01/sq0010/SH0040/comp/work/comp_v001.nk
-        """
-        try:
-            # Normalize path
-            filepath = os.path.normpath(filepath)
-            parts = filepath.split(os.sep)
-
-            context = {}
-
-            # Try to find project (usually after drive letter)
-            for i, part in enumerate(parts):
-                if part in ['SWA', 'PROJECT_A', 'PROJECT_B']:  # Add your project names
-                    context['project'] = part
-
-                    # Look for ep/seq/shot pattern after project
-                    if i + 4 < len(parts):
-                        # Check if we have scene directory
-                        if parts[i + 1] == 'all' and parts[i + 2] == 'scene':
-                            context['ep'] = parts[i + 3] if i + 3 < len(parts) else ''
-                            context['seq'] = parts[i + 4] if i + 4 < len(parts) else ''
-                            context['shot'] = parts[i + 5] if i + 5 < len(parts) else ''
-                            break
-
-            # Only return if we found at least project
-            if context.get('project'):
-                self.logger.info(f"Detected context from path: {context}")
-                return context
-
-            return None
-
-        except Exception as e:
-            self.logger.error(f"Error detecting context from path: {e}")
             return None
 
     def _update_context_details(self):
