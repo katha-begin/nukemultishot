@@ -574,6 +574,22 @@ except Exception as e:
         custom_vars = self.get_custom_variables()
         variables.update(custom_vars)
 
+        # CRITICAL FIX: Override PROJ_ROOT and IMG_ROOT with values from individual knobs
+        # Individual knobs are the source of truth (they have OS-specific paths)
+        # JSON knob may have Windows paths even when individual knobs have Linux paths
+        if self._nuke_available:
+            try:
+                import nuke
+                root = nuke.root()
+                for key in ['PROJ_ROOT', 'IMG_ROOT']:
+                    if root.knob(key):
+                        knob_value = root[key].value()
+                        if knob_value:
+                            variables[key] = knob_value
+                            self.logger.debug(f"Using individual knob value for {key}: {knob_value}")
+            except Exception as e:
+                self.logger.error(f"Error reading individual knobs: {e}")
+
         # NO CONFIG FILE ACCESS - PRD 4.1 compliance
         # All variables must be script-embedded for farm compatibility
 
