@@ -440,13 +440,12 @@ except Exception as e:
                     root[key].setValue(final_value)
                     self.logger.info(f"Created individual knob: {key} = {final_value}")
                 else:
-                    # Knob already exists - check if it's a String_Knob before updating
+                    # Knob already exists - DO NOT overwrite it!
+                    # The existing knob value is the source of truth (may be Linux paths from Deadline)
                     existing_knob = root[key]
-                    if isinstance(existing_knob, nuke.String_Knob):
-                        existing_knob.setValue(final_value)
-                        self.logger.debug(f"Updated knob {key} = {final_value}")
-                    else:
-                        self.logger.warning(f"Knob {key} exists but is not a String_Knob (type: {type(existing_knob).__name__}), skipping update")
+                    existing_value = existing_knob.value()
+                    self.logger.debug(f"Knob {key} already exists with value: {existing_value} (preserving, not overwriting with {final_value})")
+                    # DO NOT call setValue() here - preserve the existing value!
 
         except Exception as e:
             self.logger.error(f"Error creating individual root knobs: {e}")

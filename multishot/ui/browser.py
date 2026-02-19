@@ -433,12 +433,14 @@ class MultishotBrowser(BaseWidget):
             except Exception as e:
                 self.logger.warning(f"Could not load project config: {e}")
 
-            # Set up root variables if not already set
-            roots = self.variable_manager.config_manager.get("roots", {})
-            if not roots.get("PROJ_ROOT"):
-                self.logger.warning("PROJ_ROOT not found in config, using default V:/")
-                self.variable_manager.set_variable("PROJ_ROOT", "V:/")
-                self.variable_manager.set_variable("IMG_ROOT", "W:/")
+            # DO NOT set default root variables here!
+            # The VariableManager already handles initial population from config in _ensure_root_variables_in_script()
+            # If we set them here, we'll overwrite any existing script-embedded values (e.g., Linux paths)
+            # Just log what we have
+            all_vars = self.variable_manager.get_all_variables()
+            proj_root = all_vars.get("PROJ_ROOT", "")
+            img_root = all_vars.get("IMG_ROOT", "")
+            self.logger.debug(f"Current root variables: PROJ_ROOT={proj_root}, IMG_ROOT={img_root}")
 
             # Load current context from variable manager
             self.refresh_context_from_variables()
