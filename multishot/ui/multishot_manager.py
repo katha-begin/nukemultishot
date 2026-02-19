@@ -519,14 +519,20 @@ class MultishotManagerDialog(BaseWidget):
                 print(f"   root.last_frame = {nuke.root()['last_frame'].value()}")
                 self.logger.warning(f"No frame range found, using default: 1001-1100")
 
-            # Update variable manager
-            self.variable_manager.set_context_variables({
+            # Update variable manager with ALL context variables
+            # CRITICAL: Must update ALL context variables, not just shot info
+            # Otherwise old values from script filename will persist (e.g., old seq/shot from filename)
+            context_to_set = {
                 'project': shot_data['project'],
                 'ep': shot_data['ep'],
                 'seq': shot_data['seq'],
-                'shot': shot_data['shot']
-            })
-            print(f"   Updated variable manager")
+                'shot': shot_data['shot'],
+                'department': shot_data.get('department', 'comp'),  # Default to 'comp' if not specified
+                'variance': shot_data.get('variance', ''),  # Default to empty if not specified
+                'version': shot_data.get('version', 'v001')  # Default to 'v001' if not specified
+            }
+            self.variable_manager.set_context_variables(context_to_set)
+            print(f"   Updated variable manager with context: {context_to_set}")
 
             # Update current shot key BEFORE refreshing table
             shot_key = f"{shot_data['project']}_{shot_data['ep']}_{shot_data['seq']}_{shot_data['shot']}"
@@ -757,11 +763,27 @@ class MultishotManagerDialog(BaseWidget):
             json_filename = f".{ep}_{seq}_{shot}.json"
             json_path = os.path.join(proj_root, project, 'all', 'scene', ep, seq, shot, json_filename)
 
+            # Normalize path for OS (converts forward slashes to backslashes on Windows)
+            json_path = os.path.normpath(json_path)
+
             print(f"🔍 [FRAME RANGE] Looking for: {json_path}")
             self.logger.info(f"Looking for shot JSON: {json_path}")
 
+            # Check if directory exists
+            json_dir = os.path.dirname(json_path)
+            if not os.path.exists(json_dir):
+                print(f"❌ [FRAME RANGE] Directory not found: {json_dir}")
+                self.logger.warning(f"Shot directory not found: {json_dir}")
+                return None
+
             if not os.path.exists(json_path):
                 print(f"❌ [FRAME RANGE] File not found: {json_path}")
+                # List files in directory to help debug
+                try:
+                    files_in_dir = os.listdir(json_dir)
+                    print(f"📁 [FRAME RANGE] Files in directory: {files_in_dir}")
+                except Exception as e:
+                    print(f"⚠️ [FRAME RANGE] Could not list directory: {e}")
                 self.logger.warning(f"Shot JSON not found: {json_path}")
                 return None
 
@@ -2324,22 +2346,3 @@ class AddShotsDialog(QtWidgets.QDialog):
                 "Error",
                 f"Failed to collect selected shots:\n{e}"
             )
-
-
-def show_multishot_manager():
-    """Show the multishot manager interface."""
-    try:
-        from ..core.variables import VariableManager
-
-        # Get or create shared variable manager
-        variable_manager = VariableManager()
-
-        # Create and show dialog (use exec_() to keep it open)
-        dialog = MultishotManagerDialog(variable_manager=variable_manager)
-        dialog.exec_()
-
-    except Exception as e:
-        print(f"Error showing multishot manager: {e}")
-        import traceback
-        traceback.print_exc()
-
