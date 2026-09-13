@@ -773,7 +773,7 @@ class DirectoryScanner:
             }
 
             # Scan renders (IMG_ROOT)
-            img_root = self._get_img_root()
+            img_root = self._get_img_root(project)
             if img_root:
                 render_path = os.path.join(img_root, project, "all", "scene", episode, sequence, shot, department, "publish")
                 dept_assets['renders'] = self._scan_recursive_assets(render_path, ['exr', 'png', 'jpg', 'jpeg', 'tiff', 'dpx'])
@@ -876,13 +876,10 @@ class DirectoryScanner:
 
         return sorted(assets)
 
-    def _get_img_root(self) -> str:
-        """Get IMG_ROOT from configuration."""
+    def _get_img_root(self, project: str) -> str:
+        """Get IMG_ROOT for a project: its registered root (e.g. EGA -> Y:/), else the global root."""
         try:
-            from ..utils.config import ConfigManager
-            config_manager = ConfigManager()
-            roots = config_manager.get("roots", {})
-            return roots.get("IMG_ROOT", "")
+            return self.config_manager.get_project_roots(project).get("IMG_ROOT", "")
         except Exception as e:
             self.logger.error(f"Error getting IMG_ROOT: {e}")
             return ""
@@ -908,7 +905,7 @@ class DirectoryScanner:
             return cached
 
         # Comp renders are in IMG_ROOT
-        img_root = self._get_img_root()
+        img_root = self._get_img_root(project)
         if not img_root:
             return []
 

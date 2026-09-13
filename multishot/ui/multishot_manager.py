@@ -1269,6 +1269,14 @@ class MultishotManagerDialog(BaseWidget):
                 'W:\\': '/mnt/igloo_swa_w/',
                 'w:/': '/mnt/igloo_swa_w/',
                 'w:\\': '/mnt/igloo_swa_w/',
+                'X:/': '/mnt/igloo_ega_x/',
+                'X:\\': '/mnt/igloo_ega_x/',
+                'x:/': '/mnt/igloo_ega_x/',
+                'x:\\': '/mnt/igloo_ega_x/',
+                'Y:/': '/mnt/igloo_ega_y/',
+                'Y:\\': '/mnt/igloo_ega_y/',
+                'y:/': '/mnt/igloo_ega_y/',
+                'y:\\': '/mnt/igloo_ega_y/',
                 'T:/': '/mnt/ppr_dev_t/',
                 'T:\\': '/mnt/ppr_dev_t/',
                 't:/': '/mnt/ppr_dev_t/',
@@ -1278,6 +1286,8 @@ class MultishotManagerDialog(BaseWidget):
             linux_to_win = {
                 '/mnt/igloo_swa_v/': 'V:/',
                 '/mnt/igloo_swa_w/': 'W:/',
+                '/mnt/igloo_ega_x/': 'X:/',
+                '/mnt/igloo_ega_y/': 'Y:/',
                 '/mnt/ppr_dev_t/': 'T:/'
             }
 

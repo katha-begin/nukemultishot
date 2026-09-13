@@ -141,7 +141,15 @@ def convert_paths_to_linux():
             'W:/': '/mnt/igloo_swa_w/',
             'W:\\': '/mnt/igloo_swa_w/',
             'w:/': '/mnt/igloo_swa_w/',
-            'w:\\': '/mnt/igloo_swa_w/'
+            'w:\\': '/mnt/igloo_swa_w/',
+            'X:/': '/mnt/igloo_ega_x/',
+            'X:\\': '/mnt/igloo_ega_x/',
+            'x:/': '/mnt/igloo_ega_x/',
+            'x:\\': '/mnt/igloo_ega_x/',
+            'Y:/': '/mnt/igloo_ega_y/',
+            'Y:\\': '/mnt/igloo_ega_y/',
+            'y:/': '/mnt/igloo_ega_y/',
+            'y:\\': '/mnt/igloo_ega_y/'
         }
 
         # 1. Convert multishot_custom JSON
@@ -365,7 +373,15 @@ def get_environment_variables():
                 'W:/': '/mnt/igloo_swa_w/',
                 'W:\\': '/mnt/igloo_swa_w/',
                 'w:/': '/mnt/igloo_swa_w/',
-                'w:\\': '/mnt/igloo_swa_w/'
+                'w:\\': '/mnt/igloo_swa_w/',
+                'X:/': '/mnt/igloo_ega_x/',
+                'X:\\': '/mnt/igloo_ega_x/',
+                'x:/': '/mnt/igloo_ega_x/',
+                'x:\\': '/mnt/igloo_ega_x/',
+                'Y:/': '/mnt/igloo_ega_y/',
+                'Y:\\': '/mnt/igloo_ega_y/',
+                'y:/': '/mnt/igloo_ega_y/',
+                'y:\\': '/mnt/igloo_ega_y/'
             }
 
             for win_path, linux_path in path_mappings.items():

@@ -122,7 +122,15 @@ def fix_multishot_paths_in_script(script_path):
             'W:/': '/mnt/igloo_swa_w/',
             'W:\\\\': '/mnt/igloo_swa_w/',
             'w:/': '/mnt/igloo_swa_w/',
-            'w:\\\\': '/mnt/igloo_swa_w/'
+            'w:\\\\': '/mnt/igloo_swa_w/',
+            'X:/': '/mnt/igloo_ega_x/',
+            'X:\\\\': '/mnt/igloo_ega_x/',
+            'x:/': '/mnt/igloo_ega_x/',
+            'x:\\\\': '/mnt/igloo_ega_x/',
+            'Y:/': '/mnt/igloo_ega_y/',
+            'Y:\\\\': '/mnt/igloo_ega_y/',
+            'y:/': '/mnt/igloo_ega_y/',
+            'y:\\\\': '/mnt/igloo_ega_y/'
         }
 
         # Find and fix multishot_custom JSON knob
@@ -257,7 +265,15 @@ def set_ocio_from_script(script_path):
                 'W:/': '/mnt/igloo_swa_w/',
                 'W:\\': '/mnt/igloo_swa_w/',
                 'w:/': '/mnt/igloo_swa_w/',
-                'w:\\': '/mnt/igloo_swa_w/'
+                'w:\\': '/mnt/igloo_swa_w/',
+                'X:/': '/mnt/igloo_ega_x/',
+                'X:\\': '/mnt/igloo_ega_x/',
+                'x:/': '/mnt/igloo_ega_x/',
+                'x:\\': '/mnt/igloo_ega_x/',
+                'Y:/': '/mnt/igloo_ega_y/',
+                'Y:\\': '/mnt/igloo_ega_y/',
+                'y:/': '/mnt/igloo_ega_y/',
+                'y:\\': '/mnt/igloo_ega_y/'
             }
 
             for win_path, linux_path in path_mappings.items():
