@@ -496,6 +496,9 @@ class MultishotManagerDialog(BaseWidget):
                 nuke.root()[knob_name].setValue(value)
                 print(f"   Set {knob_name} = {value}")
 
+            # Switch PROJ_ROOT/IMG_ROOT to the shot's project roots (e.g. EGA -> X:/, Y:/)
+            self._apply_project_roots(shot_data)
+
             # ✅ NEW: Set frame range from shot JSON file
             print(f"\n📊 [SET SHOT] Reading frame range from JSON...")
             frame_range = self._read_frame_range_from_shot_json(shot_data)
@@ -707,7 +710,7 @@ class MultishotManagerDialog(BaseWidget):
             import os
 
             # Build path to JSON file
-            proj_root = self.variable_manager.get_variable('PROJ_ROOT')
+            proj_root = self._get_shot_roots(shot_data)['PROJ_ROOT']
             if not proj_root:
                 return False
 
@@ -746,7 +749,7 @@ class MultishotManagerDialog(BaseWidget):
             import os
 
             # Build path to JSON file
-            proj_root = self.variable_manager.get_variable('PROJ_ROOT')
+            proj_root = self._get_shot_roots(shot_data)['PROJ_ROOT']
             print(f"\n🔍 [FRAME RANGE] PROJ_ROOT = {proj_root}")
 
             if not proj_root:
@@ -1185,6 +1188,39 @@ class MultishotManagerDialog(BaseWidget):
                 f"Failed to unbake expressions:\n{e}"
             )
 
+    def _get_shot_roots(self, shot_data):
+        """
+        Get PROJ_ROOT and IMG_ROOT for a shot.
+
+        Registered projects use their own roots (e.g. EGA -> X:/, Y:/),
+        other projects use the script roots.
+        """
+        roots = {
+            'PROJ_ROOT': self.variable_manager.get_variable('PROJ_ROOT'),
+            'IMG_ROOT': self.variable_manager.get_variable('IMG_ROOT')
+        }
+        registered = self.variable_manager.config_manager.get('projects', {}).get(shot_data.get('project'), {})
+        roots.update(registered)
+        return roots
+
+    def _apply_project_roots(self, shot_data):
+        """Set the script PROJ_ROOT and IMG_ROOT to the shot's project roots."""
+        roots = self._get_shot_roots(shot_data)
+        current = {key: self.variable_manager.get_variable(key) for key in ['PROJ_ROOT', 'IMG_ROOT']}
+        if roots == current:
+            return
+
+        if self._get_current_os() != 'Windows':
+            print(f"   Script uses Linux paths, not switching roots to {roots} - toggle to Win first")
+            self.logger.warning(f"Script uses Linux paths, not switching roots to {roots}")
+            return
+
+        custom_vars = self.variable_manager.get_custom_variables()
+        custom_vars.update(roots)
+        if self.variable_manager.set_custom_variables(custom_vars):
+            print(f"   Switched roots for {shot_data['project']}: {current} -> {roots}")
+            self.logger.info(f"Switched roots for {shot_data['project']}: {current} -> {roots}")
+
     def _get_current_os(self):
         """
         Get current OS from PROJ_ROOT knob.
@@ -1383,7 +1419,7 @@ class MultishotManagerDialog(BaseWidget):
                 save_location = 'version'
 
             # Get PROJ_ROOT
-            proj_root = self.variable_manager.get_variable('PROJ_ROOT')
+            proj_root = self._get_shot_roots(shot_data)['PROJ_ROOT']
             if not proj_root:
                 QtWidgets.QMessageBox.warning(
                     self,
@@ -1545,7 +1581,7 @@ class MultishotManagerDialog(BaseWidget):
 
             # Add PROJ_ROOT to shot_data if not present
             if 'PROJ_ROOT' not in shot_data:
-                proj_root = self.variable_manager.get_variable('PROJ_ROOT')
+                proj_root = self._get_shot_roots(shot_data)['PROJ_ROOT']
                 if proj_root:
                     shot_data['PROJ_ROOT'] = proj_root
 
@@ -2072,8 +2108,9 @@ class VersionSettingDialog(QtWidgets.QDialog):
 
             # Build directory path
             # Format: IMG_ROOT/project/all/scene/ep/seq/shot/department/publish/
-            img_root = vm.get_variable('IMG_ROOT')
             project = self.shot_data.get('project', '')
+            registered = vm.config_manager.get('projects', {}).get(project, {})
+            img_root = registered.get('IMG_ROOT') or vm.get_variable('IMG_ROOT')
             ep = self.shot_data.get('ep', '')
             seq = self.shot_data.get('seq', '')
             shot = self.shot_data.get('shot', '')
@@ -2237,28 +2274,27 @@ class AddShotsDialog(QtWidgets.QDialog):
         try:
             # Get root variables
             proj_root = self.variable_manager.get_variable('PROJ_ROOT')
-            if not proj_root:
-                self.logger.warning("PROJ_ROOT not set")
-                placeholder = QtWidgets.QTreeWidgetItem(self.tree_view)
-                placeholder.setText(0, "PROJ_ROOT not set - please configure in Variables dialog")
-                return
 
-            # Scan for projects
-            projects = self.scanner.scan_projects(proj_root)
+            # Scan for projects in PROJ_ROOT and registered project roots (e.g. EGA on X:/)
+            projects = self.scanner.scan_all_projects(proj_root or "")
 
             if not projects:
                 placeholder = QtWidgets.QTreeWidgetItem(self.tree_view)
-                placeholder.setText(0, f"No projects found in {proj_root}")
+                if not proj_root:
+                    self.logger.warning("PROJ_ROOT not set")
+                    placeholder.setText(0, "PROJ_ROOT not set - please configure in Variables dialog")
+                else:
+                    placeholder.setText(0, f"No projects found in {proj_root}")
                 return
 
-            # Build tree for each project
-            for project in projects:
+            # Build tree for each project, scanning under its own root
+            for project, project_root in projects.items():
                 project_item = QtWidgets.QTreeWidgetItem(self.tree_view)
                 project_item.setText(0, f"📁 {project}")
                 project_item.setExpanded(False)
 
                 # Scan episodes
-                episodes = self.scanner.scan_episodes(proj_root, project)
+                episodes = self.scanner.scan_episodes(project_root, project)
 
                 for episode in episodes:
                     ep_item = QtWidgets.QTreeWidgetItem(project_item)
@@ -2266,7 +2302,7 @@ class AddShotsDialog(QtWidgets.QDialog):
                     ep_item.setExpanded(False)
 
                     # Scan sequences
-                    sequences = self.scanner.scan_sequences(proj_root, project, episode)
+                    sequences = self.scanner.scan_sequences(project_root, project, episode)
 
                     for sequence in sequences:
                         seq_item = QtWidgets.QTreeWidgetItem(ep_item)
@@ -2274,7 +2310,7 @@ class AddShotsDialog(QtWidgets.QDialog):
                         seq_item.setExpanded(False)
 
                         # Scan shots
-                        shots = self.scanner.scan_shots(proj_root, project, episode, sequence)
+                        shots = self.scanner.scan_shots(project_root, project, episode, sequence)
 
                         for shot in shots:
                             shot_item = QtWidgets.QTreeWidgetItem(seq_item)

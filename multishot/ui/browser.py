@@ -457,7 +457,10 @@ class MultishotBrowser(BaseWidget):
             roots = self.variable_manager.config_manager.get("roots", {})
             proj_root = roots.get("PROJ_ROOT", "")
 
-            if not proj_root or not os.path.exists(proj_root):
+            # Registered projects on their own drives (e.g. EGA on X:/)
+            registered_projects = self.scanner.scan_all_projects("")
+
+            if (not proj_root or not os.path.exists(proj_root)) and not registered_projects:
                 self.logger.warning(f"Project root not found: {proj_root}")
                 return
 
@@ -465,13 +468,18 @@ class MultishotBrowser(BaseWidget):
             projects = ["SWA", "TestProject"]
 
             # Also try to scan for projects (directories in project root)
-            try:
-                for item in os.listdir(proj_root):
-                    item_path = os.path.join(proj_root, item)
-                    if os.path.isdir(item_path) and item not in projects:
-                        projects.append(item)
-            except (OSError, PermissionError) as e:
-                self.logger.warning(f"Error scanning project root: {e}")
+            if proj_root and os.path.exists(proj_root):
+                try:
+                    for item in os.listdir(proj_root):
+                        item_path = os.path.join(proj_root, item)
+                        if os.path.isdir(item_path) and item not in projects:
+                            projects.append(item)
+                except (OSError, PermissionError) as e:
+                    self.logger.warning(f"Error scanning project root: {e}")
+
+            for project in registered_projects:
+                if project not in projects:
+                    projects.append(project)
 
             # Update project combo
             self._updating_ui = True
@@ -493,6 +501,13 @@ class MultishotBrowser(BaseWidget):
 
         except Exception as e:
             self.logger.error(f"Error loading projects: {e}")
+
+    def _get_proj_root(self, project):
+        """Get PROJ_ROOT for a project: its registered root, else the script-embedded root."""
+        registered = self.variable_manager.config_manager.get("projects", {}).get(project, {})
+        if registered.get("PROJ_ROOT"):
+            return registered["PROJ_ROOT"]
+        return self.variable_manager.get_all_variables().get("PROJ_ROOT", "")
 
     def update_ui_from_context(self):
         """Update UI controls from current context."""
@@ -622,7 +637,7 @@ class MultishotBrowser(BaseWidget):
                 self.logger.debug("No project selected, skipping episode loading")
                 return
 
-            roots = self.variable_manager.config_manager.get("roots", {})
+            roots = self.variable_manager.config_manager.get_project_roots(project)
             proj_root = roots.get("PROJ_ROOT", "")
 
             self.logger.debug(f"Loading episodes for project: {project}, proj_root: {proj_root}")
@@ -671,7 +686,7 @@ class MultishotBrowser(BaseWidget):
             if not project or not episode:
                 return
 
-            roots = self.variable_manager.config_manager.get("roots", {})
+            roots = self.variable_manager.config_manager.get_project_roots(project)
             proj_root = roots.get("PROJ_ROOT", "")
 
             sequences = self.scanner.scan_sequences(proj_root, project, episode)
@@ -703,7 +718,7 @@ class MultishotBrowser(BaseWidget):
             if not project or not episode or not sequence:
                 return
 
-            roots = self.variable_manager.config_manager.get("roots", {})
+            roots = self.variable_manager.config_manager.get_project_roots(project)
             proj_root = roots.get("PROJ_ROOT", "")
 
             shots = self.scanner.scan_shots(proj_root, project, episode, sequence)
@@ -820,9 +835,8 @@ class MultishotBrowser(BaseWidget):
                 self.logger.debug("Incomplete context for nuke files tab")
                 return
 
-            # Get project root from script-embedded variables only (PRD 4.1 compliance)
-            all_vars = self.variable_manager.get_all_variables()
-            proj_root = all_vars.get("PROJ_ROOT", "")
+            # Registered project root (e.g. EGA on X:/), else script-embedded root (PRD 4.1)
+            proj_root = self._get_proj_root(context['project'])
 
             if not proj_root:
                 self.logger.debug("No PROJ_ROOT found for nuke files tab")
@@ -894,7 +908,7 @@ class MultishotBrowser(BaseWidget):
                 return
 
             # Get project root for scanning
-            roots = self.variable_manager.config_manager.get("roots", {})
+            roots = self.variable_manager.config_manager.get_project_roots(context['project'])
             proj_root = roots.get("PROJ_ROOT", "")
             img_root = roots.get("IMG_ROOT", "")
 
@@ -1083,7 +1097,7 @@ class MultishotBrowser(BaseWidget):
                 return
 
             # Get project root for scanning
-            roots = self.variable_manager.config_manager.get("roots", {})
+            roots = self.variable_manager.config_manager.get_project_roots(context['project'])
             proj_root = roots.get("PROJ_ROOT", "")
 
             if not proj_root:
@@ -1255,9 +1269,8 @@ class MultishotBrowser(BaseWidget):
                 nuke.message("Error: Incomplete context. Please set project, episode, sequence, and shot.")
                 return
 
-            # Get project root from script-embedded variables only (PRD 4.1 compliance)
-            all_vars = self.variable_manager.get_all_variables()
-            proj_root = all_vars.get("PROJ_ROOT", "")
+            # Registered project root (e.g. EGA on X:/), else script-embedded root (PRD 4.1)
+            proj_root = self._get_proj_root(context['project'])
 
             if not proj_root:
                 nuke.message("Error: No PROJ_ROOT found in configuration.")
@@ -2163,9 +2176,8 @@ class MultishotBrowser(BaseWidget):
                 nuke.message("Error: Incomplete context. Please set project, episode, sequence, and shot.")
                 return
 
-            # Get project root from script-embedded variables only (PRD 4.1 compliance)
-            all_vars = self.variable_manager.get_all_variables()
-            proj_root = all_vars.get("PROJ_ROOT", "")
+            # Registered project root (e.g. EGA on X:/), else script-embedded root (PRD 4.1)
+            proj_root = self._get_proj_root(context['project'])
 
             if not proj_root:
                 nuke.message("Error: No PROJ_ROOT found in configuration.")

@@ -28,6 +28,19 @@ class ConfigManager:
             },
             "project": "SWA",
 
+            # Projects that live on their own drives. Each project keeps the
+            # SWA layout ({PROJ_ROOT}{project}/all/scene/...), only the roots differ.
+            "projects": {
+                "SWA": {
+                    "PROJ_ROOT": "V:/",
+                    "IMG_ROOT": "W:/"
+                },
+                "EGA": {
+                    "PROJ_ROOT": "X:/",
+                    "IMG_ROOT": "Y:/"
+                }
+            },
+
             "asset_types": {
                 "image": [".exr", ".png", ".jpg", ".jpeg", ".tiff", ".tif", ".dpx"],
                 "geometry": [".abc", ".obj", ".fbx", ".usd", ".usda", ".usdc"],
@@ -207,6 +220,17 @@ class ConfigManager:
             self._user_prefs = {}
         self._user_prefs[key] = value
     
+    def get_project_roots(self, project: str) -> Dict[str, str]:
+        """
+        Get PROJ_ROOT and IMG_ROOT for a project.
+
+        Registered projects (see "projects" in the config) use their own roots,
+        e.g. EGA -> X:/ and Y:/. Unregistered projects fall back to the global roots.
+        """
+        roots = dict(self.get("roots", {}))
+        roots.update(self.get("projects", {}).get(project, {}))
+        return roots
+
     def get_path_template(self, path_type: str) -> Optional[str]:
         """Get a path template for the specified type."""
         paths = self.get("paths", {})

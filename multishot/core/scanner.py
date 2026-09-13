@@ -316,6 +316,32 @@ class DirectoryScanner:
         self.logger.info(f"Found {len(projects)} projects in {project_root}: {projects}")
         return projects
 
+    def scan_all_projects(self, project_root: str) -> Dict[str, str]:
+        """
+        Scan for projects in the given root and in every registered project root.
+
+        Args:
+            project_root: Default root directory path (e.g., "V:/"), may be empty
+
+        Returns:
+            Dict of project name -> PROJ_ROOT (e.g., {"SWA": "V:/", "EGA": "X:/"})
+        """
+        projects = {}
+
+        if project_root:
+            for project in self.scan_projects(project_root):
+                projects[project] = project_root
+
+        # Registered projects live under their own roots (e.g. EGA on X:/)
+        for project, roots in self.config_manager.get("projects", {}).items():
+            proj_root = roots.get("PROJ_ROOT", "")
+            if proj_root and os.path.isdir(os.path.join(proj_root, project, "all", "scene")):
+                projects[project] = proj_root
+            else:
+                self.logger.debug(f"Registered project {project} not found under {proj_root}")
+
+        return projects
+
     def scan_episodes(self, project_root: str, project: str) -> List[str]:
         """
         Scan for available episodes in the project.
