@@ -493,6 +493,9 @@ class MultishotBrowser(BaseWidget):
             elif projects:
                 self.project_combo.setCurrentText(projects[0])
 
+            # Local navigation state only - the Browser never writes context to the script
+            self._current_context['project'] = self.project_combo.currentText()
+
             self._updating_ui = False
 
             # Trigger episode loading for the selected project
@@ -660,16 +663,25 @@ class MultishotBrowser(BaseWidget):
             self.logger.debug(f"Found episodes: {episodes}")
 
             self._updating_ui = True
+            self.episode_combo.clear()
             if episodes:
                 self.episode_combo.addItems(episodes)
-                self.episode_combo.setCurrentText(episodes[0])
-                self._current_context['ep'] = episodes[0]
+                # Keep the active episode if it exists, otherwise use the first one
+                episode = self._current_context.get('ep')
+                if episode not in episodes:
+                    episode = episodes[0]
+                self.episode_combo.setCurrentText(episode)
+                self._current_context['ep'] = episode
                 self.episode_combo.setEnabled(True)
             else:
                 self.episode_combo.addItem("No episodes found")
                 self.episode_combo.setEnabled(False)
                 self.status_label.setText(f"No episodes found in {scene_dir}")
             self._updating_ui = False
+
+            # Change signals were blocked above, so load the next level explicitly
+            if episodes:
+                self.load_sequences()
 
         except Exception as e:
             self.logger.error(f"Error loading episodes: {e}")
@@ -692,15 +704,24 @@ class MultishotBrowser(BaseWidget):
             sequences = self.scanner.scan_sequences(proj_root, project, episode)
 
             self._updating_ui = True
+            self.sequence_combo.clear()
             if sequences:
                 self.sequence_combo.addItems(sequences)
-                self.sequence_combo.setCurrentText(sequences[0])
-                self._current_context['seq'] = sequences[0]
+                # Keep the active sequence if it exists, otherwise use the first one
+                sequence = self._current_context.get('seq')
+                if sequence not in sequences:
+                    sequence = sequences[0]
+                self.sequence_combo.setCurrentText(sequence)
+                self._current_context['seq'] = sequence
                 self.sequence_combo.setEnabled(True)
             else:
                 self.sequence_combo.addItem(f"No sequences found in {episode}")
                 self.sequence_combo.setEnabled(False)
             self._updating_ui = False
+
+            # Change signals were blocked above, so load the next level explicitly
+            if sequences:
+                self.load_shots()
 
         except Exception as e:
             self.logger.error(f"Error loading sequences: {e}")
@@ -724,10 +745,15 @@ class MultishotBrowser(BaseWidget):
             shots = self.scanner.scan_shots(proj_root, project, episode, sequence)
 
             self._updating_ui = True
+            self.shot_combo.clear()
             self.shot_combo.addItems(shots)
             if shots:
-                self.shot_combo.setCurrentText(shots[0])
-                self._current_context['shot'] = shots[0]
+                # Keep the active shot if it exists, otherwise use the first one
+                shot = self._current_context.get('shot')
+                if shot not in shots:
+                    shot = shots[0]
+                self.shot_combo.setCurrentText(shot)
+                self._current_context['shot'] = shot
             self._updating_ui = False
 
         except Exception as e:
