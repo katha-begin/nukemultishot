@@ -77,13 +77,12 @@ class DirectoryScanner:
             if not current_project:
                 current_project, project_root = self._find_project_configs()
 
-            # Load project config if found
+            # Load project config for scanning only. Never write it into the script: roots and
+            # project belong to the script (set by Multishot Manager), and V:/root_config.json
+            # reset EGA shots to V:/ W:/ with project "root"
             if current_project and project_root:
                 self.logger.info(f"Auto-detected project: {current_project} at {project_root}")
-                config = self.config_manager.load_project_config(project_root, current_project)
-
-                # Auto-populate variables
-                self._populate_variables_from_config(config, current_project, project_root)
+                self.config_manager.load_project_config(project_root, current_project)
             else:
                 self.logger.info("No project auto-detected, using default configuration")
 
@@ -151,30 +150,6 @@ class DirectoryScanner:
                     continue
 
         return None, None
-
-    def _populate_variables_from_config(self, config: Dict[str, Any], project: str, project_root: str):
-        """Populate variables from loaded config."""
-        try:
-            from .variables import VariableManager
-            vm = VariableManager()
-
-            # Set root paths from config
-            roots = config.get('roots', {})
-            for key, value in roots.items():
-                vm.set_variable(key, value)
-
-            # Set project
-            vm.set_variable('project', project)
-
-            # Set other defaults from config
-            defaults = config.get('defaults', {})
-            for key, value in defaults.items():
-                vm.set_variable(key, value)
-
-            self.logger.info(f"Auto-populated {len(roots) + len(defaults) + 1} variables from config")
-
-        except Exception as e:
-            self.logger.warning(f"Error populating variables from config: {e}")
 
     def _compile_patterns(self) -> Dict[str, re.Pattern]:
         """Compile regex patterns for directory matching."""

@@ -5,19 +5,66 @@ Run from the repo root:
     python -m unittest tests.ega_project_roots_test
 """
 
+import json
 import os
 import shutil
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from multishot.core.scanner import DirectoryScanner
 from multishot.deadline import nuke_wrapper
 from multishot.deadline.farm_script import FarmScriptManager
+from multishot.nodes import read_node
 
 SHOT = ("Ep02", "sq0380", "SH3310")
+
+
+class TestScannerKeepsScriptVariables(unittest.TestCase):
+    """Creating a scanner must not reset the script roots/project (EGA Reads fell back to W:/root/...)."""
+
+    def test_scanner_does_not_write_variables_from_found_config(self):
+        tmp = tempfile.mkdtemp()
+        cwd = os.getcwd()
+        try:
+            # Same file as V:/root_config.json on the studio drive
+            with open(os.path.join(tmp, "root_config.json"), "w") as f:
+                json.dump({"roots": {"PROJ_ROOT": "V:/", "IMG_ROOT": "W:/"}}, f)
+            os.chdir(tmp)
+
+            written = []
+
+            class RecordingVariableManager:
+                def set_variable(self, key, value):
+                    written.append((key, value))
+
+            with mock.patch("multishot.core.variables.VariableManager", RecordingVariableManager):
+                DirectoryScanner()
+
+            self.assertEqual(written, [])
+        finally:
+            os.chdir(cwd)
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+class TestReadNodeName(unittest.TestCase):
+    """Browser Create Read Nodes: each image in a layer gets its own node name."""
+
+    def test_each_image_in_layer_gets_own_name(self):
+        names = [read_node.get_read_node_name("lighting", "MASTER_CHAR_A", image)
+                 for image in ["MASTER_CHAR_A", "MASTER_CHAR_A_CRYPTO", "MASTER_CHAR_A_UTIL"]]
+        self.assertEqual(names, [
+            "MultishotRead_lighting_MASTER_CHAR_A",
+            "MultishotRead_lighting_MASTER_CHAR_A_CRYPTO",
+            "MultishotRead_lighting_MASTER_CHAR_A_UTIL",
+        ])
+
+    def test_dot_component_keeps_existing_name(self):
+        name = read_node.get_read_node_name("lighting", "MASTER_CHAR_A", "MASTER_CHAR_A.Cryptomatte_node")
+        self.assertEqual(name, "MultishotRead_lighting_MASTER_CHAR_A_Cryptomatte_node")
 
 
 class TestScannerProjectImgRoot(unittest.TestCase):

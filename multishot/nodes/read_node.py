@@ -432,6 +432,23 @@ if hasattr(read_node_module, '_node_instances'):
 _node_instances = {}
 
 
+def get_read_node_name(department: str, layer: str, image_name: str) -> str:
+    """
+    Build a MultishotRead node name that is unique for each image in a layer.
+
+    Args:
+        department: Department name (e.g., "lighting")
+        layer: Layer directory name (e.g., "MASTER_CHAR_A")
+        image_name: File name without frame and extension
+                    (e.g., "MASTER_CHAR_A", "MASTER_CHAR_A_CRYPTO", "MASTER_CHAR_A.Cryptomatte_node")
+
+    Returns:
+        Node name (e.g., "MultishotRead_lighting_MASTER_CHAR_A_CRYPTO")
+    """
+    element = image_name if image_name.startswith(layer) else f"{layer}_{image_name}"
+    return re.sub(r'[^a-zA-Z0-9_]', '_', f"MultishotRead_{department}_{element}")
+
+
 def restore_multishot_instances(variable_manager=None):
     """
     Restore MultishotRead instances for existing nodes in the script.

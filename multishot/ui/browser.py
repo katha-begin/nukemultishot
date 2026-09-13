@@ -1415,10 +1415,10 @@ class MultishotBrowser(BaseWidget):
                     multishot_read = MultishotRead(variable_manager=self.variable_manager)
                     read_node = multishot_read.create_node()
 
-                    # ✅ Parse asset path to extract layer and component
+                    # ✅ Parse asset path to extract layer and image name
                     # Format: v005/MASTER_CHAR_A/MASTER_CHAR_A.Cryptomatte_node.1012.exr
                     # Layer: MASTER_CHAR_A (directory name)
-                    # Component: Cryptomatte_node (optional sub-component)
+                    # Image: MASTER_CHAR_A.Cryptomatte_node (file name without frame)
 
                     path_parts = asset_path.split('/')
 
@@ -1431,43 +1431,30 @@ class MultishotBrowser(BaseWidget):
                         clean_filename = re.sub(r'\.\d{4}(-\d{4})?$', '', asset_filename)
                         layer_name = clean_filename.split('.')[0]
 
-                    # Extract component from filename (if exists)
-                    # Filename format: {layer}.{component}.{frame}.{ext}
+                    # Image name from filename
                     # Examples:
-                    #   MASTER_CHAR_A.1012.exr → component = None
-                    #   MASTER_CHAR_A.Cryptomatte_node.1012.exr → component = "Cryptomatte_node"
+                    #   MASTER_CHAR_A.1012.exr → MASTER_CHAR_A
+                    #   MASTER_CHAR_A_CRYPTO.1012.exr → MASTER_CHAR_A_CRYPTO
+                    #   MASTER_CHAR_A.Cryptomatte_node.1012.exr → MASTER_CHAR_A.Cryptomatte_node
                     asset_filename = os.path.splitext(os.path.basename(asset_path))[0]  # "MASTER_CHAR_A.Cryptomatte_node.1012"
 
                     # Remove frame numbers
                     clean_filename = re.sub(r'\.\d{4}(-\d{4})?$', '', asset_filename)  # "MASTER_CHAR_A.Cryptomatte_node"
 
-                    # Split by dot to get parts
-                    filename_parts = clean_filename.split('.')
+                    self.logger.info(f"Parsed: layer='{layer_name}', image='{clean_filename}' from '{asset_path}'")
 
-                    # If more than one part, second part onwards is the component
-                    if len(filename_parts) > 1:
-                        component = '.'.join(filename_parts[1:])  # "Cryptomatte_node"
-                    else:
-                        component = None
+                    # ✅ Build node name - unique per image, so beauty/CRYPTO/UTIL of one layer don't collide
+                    new_node_name = read_node_module.get_read_node_name(department, layer_name, clean_filename)
 
-                    self.logger.info(f"Parsed: layer='{layer_name}', component='{component}' from '{asset_path}'")
-
-                    # ✅ Build node name
-                    # Format: MultishotRead_{department}_{layer}_{component}
-                    safe_layer_name = re.sub(r'[^a-zA-Z0-9_]', '_', layer_name)
-                    if component:
-                        safe_component = re.sub(r'[^a-zA-Z0-9_]', '_', component)
-                        new_node_name = f"MultishotRead_{department}_{safe_layer_name}_{safe_component}"
-                    else:
-                        new_node_name = f"MultishotRead_{department}_{safe_layer_name}"
-
-                    # Set name on node
+                    # Set name on node. Nuke still renames on collision (e.g. same image created twice
+                    # -> ..._MASTER_CHAR_A1), so register the instance under the name the node actually got
+                    temp_node_name = read_node.name()
                     read_node.setName(new_node_name)
+                    new_node_name = read_node.name()
                     self.logger.info(f"Created node: {new_node_name}")
 
                     # ✅ CRITICAL FIX: Re-register instance with correct name!
-                    if 'MultishotRead' in read_node_module._node_instances:
-                        del read_node_module._node_instances['MultishotRead']
+                    read_node_module._node_instances.pop(temp_node_name, None)
                     read_node_module._node_instances[new_node_name] = multishot_read
                     self.logger.info(f"Registered node instance: {new_node_name}")
 
