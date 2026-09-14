@@ -10,6 +10,11 @@ from typing import Dict, Optional, List, Tuple
 from ..utils.logging import get_logger
 from ..utils.config import ConfigManager
 
+# Episode, sequence and shot names, optionally ending with a variance letter
+EPISODE_PATTERN = r'Ep\d+[A-Za-z]?'       # Ep01, Ep01A
+SEQUENCE_PATTERN = r'se?q\d+[A-Za-z]?'    # sq0110, sq0110A, seq01A
+SHOT_PATTERN = r'SH\d+[A-Za-z]?'          # SH0520, SH0020A
+
 class ContextDetector:
     """
     Detects shot context from filenames and paths.
@@ -37,17 +42,17 @@ class ContextDetector:
         Example: Ep01_sq0110_SH0520_comp_v001.nk
         """
         # Pattern breakdown:
-        # - ep: Ep\d+ (Ep01, Ep02, etc.)
-        # - seq: sq\d+ (sq0110, sq0120, etc.)
-        # - shot: SH\d+ (SH0520, SH0530, etc.)
+        # - ep: Ep\d+[A-Za-z]? (Ep01, Ep01A, etc.)
+        # - seq: se?q\d+[A-Za-z]? (sq0110, sq0110A, seq01A, etc.)
+        # - shot: SH\d+[A-Za-z]? (SH0520, SH0020A, etc.)
         # - department: [a-zA-Z]+ (comp, lighting, fx, etc.)
         # - variance: [a-zA-Z0-9_]* (optional)
         # - version: v\d+(_\d+)? (v001, v001_001, etc.)
 
         pattern = (
-            r'(?P<ep>Ep\d+)_'                    # Episode: Ep01
-            r'(?P<seq>sq\d+)_'                   # Sequence: sq0110
-            r'(?P<shot>SH\d+)_'                  # Shot: SH0520
+            rf'(?P<ep>{EPISODE_PATTERN})_'       # Episode: Ep01
+            rf'(?P<seq>{SEQUENCE_PATTERN})_'     # Sequence: sq0110
+            rf'(?P<shot>{SHOT_PATTERN})_'        # Shot: SH0520
             r'(?P<department>[a-zA-Z]+)_'        # Department: comp
             r'(?:(?P<variance>[a-zA-Z0-9_]+)_)?'  # Variance: optional
             r'(?P<version>v\d+(?:_\d+)?)'        # Version: v001 or v001_001
@@ -64,9 +69,9 @@ class ContextDetector:
         # V:/SWA/all/scene/Ep01/sq0110/SH0520/comp/version/
         patterns['nuke_path'] = re.compile(
             r'.*[/\\](?P<project>\w+)[/\\].*[/\\]scene[/\\]'
-            r'(?P<ep>Ep\d+)[/\\]'
-            r'(?P<seq>sq\d+)[/\\]'
-            r'(?P<shot>SH\d+)[/\\]'
+            rf'(?P<ep>{EPISODE_PATTERN})[/\\]'
+            rf'(?P<seq>{SEQUENCE_PATTERN})[/\\]'
+            rf'(?P<shot>{SHOT_PATTERN})[/\\]'
             r'(?P<department>[a-zA-Z]+)[/\\]',
             re.IGNORECASE
         )
@@ -75,9 +80,9 @@ class ContextDetector:
         # W:/SWA/all/scene/Ep01/sq0090/SH0450/lighting/publish/v005/
         patterns['render_path'] = re.compile(
             r'.*[/\\](?P<project>\w+)[/\\].*[/\\]scene[/\\]'
-            r'(?P<ep>Ep\d+)[/\\]'
-            r'(?P<seq>sq\d+)[/\\]'
-            r'(?P<shot>SH\d+)[/\\]'
+            rf'(?P<ep>{EPISODE_PATTERN})[/\\]'
+            rf'(?P<seq>{SEQUENCE_PATTERN})[/\\]'
+            rf'(?P<shot>{SHOT_PATTERN})[/\\]'
             r'(?P<department>[a-zA-Z]+)[/\\]publish[/\\]'
             r'(?P<version>v\d+(?:_\d+)?)[/\\]',
             re.IGNORECASE
@@ -230,16 +235,16 @@ class ContextDetector:
 
         # Validate field formats
         if 'ep' in context:
-            if not re.match(r'^Ep\d+$', context['ep'], re.IGNORECASE):
-                issues.append(f"Invalid episode format: {context['ep']} (expected: Ep##)")
+            if not re.match(rf'^{EPISODE_PATTERN}$', context['ep'], re.IGNORECASE):
+                issues.append(f"Invalid episode format: {context['ep']} (expected: Ep## or Ep##A)")
 
         if 'seq' in context:
-            if not re.match(r'^sq\d+$', context['seq'], re.IGNORECASE):
-                issues.append(f"Invalid sequence format: {context['seq']} (expected: sq####)")
+            if not re.match(rf'^{SEQUENCE_PATTERN}$', context['seq'], re.IGNORECASE):
+                issues.append(f"Invalid sequence format: {context['seq']} (expected: sq#### or sq####A)")
 
         if 'shot' in context:
-            if not re.match(r'^SH\d+$', context['shot'], re.IGNORECASE):
-                issues.append(f"Invalid shot format: {context['shot']} (expected: SH####)")
+            if not re.match(rf'^{SHOT_PATTERN}$', context['shot'], re.IGNORECASE):
+                issues.append(f"Invalid shot format: {context['shot']} (expected: SH#### or SH####A)")
 
         if 'version' in context:
             if not re.match(r'^v\d+(?:_\d+)?$', context['version'], re.IGNORECASE):

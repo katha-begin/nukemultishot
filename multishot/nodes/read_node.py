@@ -6,6 +6,7 @@ Provides variable-driven file paths with version selection and approval status.
 
 import os
 import re
+import json
 from typing import Dict, List, Optional, Any
 
 from ..utils.logging import get_logger
@@ -338,37 +339,21 @@ if hasattr(read_node_module, '_node_instances'):
 
     def get_version_for_shot(self, shot_key=None):
         """
-        Get version for a specific shot.
+        Get version stored for a specific shot.
 
         Args:
             shot_key: Shot key string. If None, uses current shot from root knobs.
 
         Returns:
-            Version string (e.g., "v001")
+            Version string (e.g., "v001"), v001 if none is stored
         """
         try:
-            import json
-
-            # Get current shot key if not provided
             if shot_key is None:
                 shot_key = self.get_shot_key()
-
-            print(f"\n🔍 [GET_VERSION] Node: {self.node.name()}, Shot: {shot_key}")
-
-            # Read shot_versions knob
-            shot_versions_str = self.node['shot_versions'].value() if self.node.knob('shot_versions') else '{}'
-            shot_versions = json.loads(shot_versions_str) if shot_versions_str else {}
-            print(f"   📊 [GET_VERSION] shot_versions knob: {shot_versions}")
-
-            # Get version for this shot (default to v001)
-            version = shot_versions.get(shot_key, 'v001')
-            print(f"   🎯 [GET_VERSION] Returning version: {version}")
-
-            return version
+            return get_shot_version(self.node, shot_key) or 'v001'
 
         except Exception as e:
             self.logger.error(f"Error getting version for shot: {e}")
-            print(f"   ❌ [GET_VERSION] Error: {e}")
             return 'v001'
 
     def set_version_for_shot(self, version, shot_key=None):
@@ -380,44 +365,16 @@ if hasattr(read_node_module, '_node_instances'):
             shot_key: Shot key string. If None, uses current shot from root knobs.
         """
         try:
-            import json
-
-            # Get current shot key if not provided
-            if shot_key is None:
-                shot_key = self.get_shot_key()
-
             # Get the ACTUAL current shot from root knobs
             current_shot_key = self.get_shot_key()
+            if shot_key is None:
+                shot_key = current_shot_key
 
-            print(f"\n💾 [SET_VERSION] Node: {self.node.name()}")
-            print(f"   🎯 [SET_VERSION] Setting version for shot: {shot_key}")
-            print(f"   📍 [SET_VERSION] Current shot in script: {current_shot_key}")
-            print(f"   📦 [SET_VERSION] Version: {version}")
+            set_shot_version(self.node, version, shot_key, current_shot_key)
 
-            # Read current shot_versions
-            shot_versions_str = self.node['shot_versions'].value() if self.node.knob('shot_versions') else '{}'
-            shot_versions = json.loads(shot_versions_str) if shot_versions_str else {}
-            print(f"   📊 [SET_VERSION] Current shot_versions: {shot_versions}")
-
-            # Update version for this shot
-            shot_versions[shot_key] = version
-            print(f"   ✏️  [SET_VERSION] Updated shot_versions: {shot_versions}")
-
-            # Write back to knob
-            self.node['shot_versions'].setValue(json.dumps(shot_versions))
-            print(f"   ✅ [SET_VERSION] Saved to shot_versions knob")
-
-            # ✅ ONLY update shot_version knob if we're setting version for the CURRENT shot
+            # Rebuild path when the node switched to this version
             if shot_key == current_shot_key:
-                self.node['shot_version'].setValue(version)
-                print(f"   ✅ [SET_VERSION] Updated shot_version knob to: {version} (current shot)")
-
-                # Rebuild path
                 self.build_expression_path()
-                print(f"   ✅ [SET_VERSION] Rebuilt expression path")
-            else:
-                print(f"   ⏭️  [SET_VERSION] NOT updating shot_version knob (setting for different shot)")
-                print(f"   ℹ️  [SET_VERSION] shot_version knob will update when switching to {shot_key}")
 
             self.logger.info(f"Set version for shot {shot_key}: {version}")
 
@@ -430,6 +387,143 @@ if hasattr(read_node_module, '_node_instances'):
 
 # Global node instances storage
 _node_instances = {}
+
+# Version directory names: v001, v002, v001_001
+VERSION_PATTERN = re.compile(r'^v(\d+)(?:_(\d+))?$', re.IGNORECASE)
+
+
+def version_sort_key(version: str):
+    """Sort key for version names: v001 < v002 < v002_001 < v010."""
+    match = VERSION_PATTERN.match(version)
+    if not match:
+        return (-1, -1)
+    return (int(match.group(1)), int(match.group(2) or 0))
+
+
+def _get_shot_versions(node) -> Dict[str, str]:
+    """Read the per-shot versions JSON stored on a MultishotRead node."""
+    shot_versions_str = node['shot_versions'].value() if node.knob('shot_versions') else ''
+    return json.loads(shot_versions_str) if shot_versions_str else {}
+
+
+def get_shot_version(node, shot_key: str) -> Optional[str]:
+    """
+    Get the version stored for a shot on a MultishotRead node.
+
+    Reads the node's knobs directly, so it works for any live node - including
+    nodes whose _node_instances entry is missing or points at a deleted node.
+
+    Returns:
+        Version string, or None if no version was stored for the shot
+    """
+    return _get_shot_versions(node).get(shot_key)
+
+
+def set_shot_version(node, version: str, shot_key: str, current_shot_key: Optional[str]):
+    """
+    Store the version for a shot on a MultishotRead node.
+
+    Args:
+        node: MultishotRead node
+        version: Version string (e.g., "v002")
+        shot_key: Shot the version is for (e.g., "EGA_Ep02_sq0380_SH3370")
+        current_shot_key: Active shot in the script - the node only switches to the
+                          version when shot_key is the active shot
+    """
+    shot_versions = _get_shot_versions(node)
+    shot_versions[shot_key] = version
+    node['shot_versions'].setValue(json.dumps(shot_versions))
+
+    if shot_key == current_shot_key:
+        apply_shot_version(node, version)
+
+
+def apply_shot_version(node, version: str):
+    """Switch a MultishotRead node to a version."""
+    node['shot_version'].setValue(version)
+
+    # A copied Read keeps [value parent.<original>.shot_version] in its path and would
+    # follow the original node's version, so point the path at this node's own knob
+    file_knob = node.knob('file')
+    if file_knob:
+        path = file_knob.value()
+        own_version = f"[value parent.{node.name()}.shot_version]"
+        fixed_path = re.sub(r'\[value parent\.[A-Za-z0-9_]+\.shot_version\]', lambda match: own_version, path)
+        if fixed_path != path:
+            file_knob.setValue(fixed_path)
+
+
+def get_file_pattern(node) -> str:
+    """Image pattern relative to the version directory (e.g., MASTER_CHAR_A/MASTER_CHAR_A_CRYPTO.%04d.exr)."""
+    if node.knob('file_pattern') and node['file_pattern'].value():
+        return node['file_pattern'].value()
+    layer = node['layer'].value() if node.knob('layer') else 'MASTER_CHAR_A'
+    return f"{layer}/{layer}.%04d.exr"
+
+
+def get_publish_dir(img_root: str, shot_data: Dict[str, str], department: str) -> str:
+    """Directory holding a department's published render versions for a shot."""
+    return os.path.join(img_root, shot_data['project'], 'all', 'scene',
+                        shot_data['ep'], shot_data['seq'], shot_data['shot'], department, 'publish')
+
+
+def find_layer_versions(publish_dir: str, file_pattern: str) -> List[str]:
+    """
+    List versions in a publish directory that contain an image, oldest first.
+
+    Args:
+        publish_dir: Department publish directory (e.g., Y:/EGA/all/scene/Ep02/sq0380/SH3370/lighting/publish)
+        file_pattern: Image pattern relative to the version directory
+                      (e.g., "MASTER_CHAR_A/MASTER_CHAR_A_CRYPTO.%04d.exr")
+
+    Returns:
+        Version names (e.g., ['v001', 'v002']) - versions with an empty or missing layer are skipped
+    """
+    if not publish_dir or not os.path.isdir(publish_dir):
+        return []
+
+    image_dir, image = os.path.split(file_pattern)
+
+    # Frame tokens (%04d, ####) match any frame number
+    parts = re.split(r'(%0?\d*d|#+)', image)
+    image_regex = re.compile('^' + ''.join(r'\d+' if i % 2 else re.escape(part) for i, part in enumerate(parts)) + '$')
+
+    versions = []
+    try:
+        for version in os.listdir(publish_dir):
+            version_image_dir = os.path.join(publish_dir, version, image_dir)
+            if VERSION_PATTERN.match(version) and os.path.isdir(version_image_dir):
+                if any(image_regex.match(filename) for filename in os.listdir(version_image_dir)):
+                    versions.append(version)
+    except OSError:
+        pass
+
+    return sorted(versions, key=version_sort_key)
+
+
+def resolve_shot_version(node, shot_key: str, publish_dir: str) -> str:
+    """
+    Version a MultishotRead node should use for a shot.
+
+    Returns:
+        The version stored for the shot, else the latest version on disk that
+        contains the node's image, else v001
+    """
+    version = get_shot_version(node, shot_key)
+    if version:
+        return version
+
+    versions = find_layer_versions(publish_dir, get_file_pattern(node))
+    return versions[-1] if versions else 'v001'
+
+
+def _is_attached(node, node_name: str) -> bool:
+    """True if a stored node object still points at a live node with this name."""
+    try:
+        return node is not None and node.name() == node_name
+    except Exception:
+        # "A PythonObject is not attached to a node" - node deleted or script reloaded
+        return False
 
 
 def get_read_node_name(department: str, layer: str, image_name: str) -> str:
@@ -474,8 +568,10 @@ def restore_multishot_instances(variable_manager=None):
             if node.knob('multishot_sep'):  # Is a MultishotRead node
                 node_name = node.name()
 
-                # Check if instance already exists
-                if node_name in _node_instances:
+                # Keep an existing instance only if it still points at this node. Reloading the
+                # script (Render button, File > Open) or cut/paste leaves dead node objects behind
+                existing = _node_instances.get(node_name)
+                if existing is not None and _is_attached(existing.node, node_name):
                     print(f"   ⏭️  [RESTORE] Instance already exists for: {node_name}")
                     continue
 

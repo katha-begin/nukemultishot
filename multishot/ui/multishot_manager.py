@@ -4,7 +4,6 @@ Multishot Manager UI for the Multishot Workflow System.
 Provides shot-based context management and version control.
 """
 
-import os
 import json
 from typing import Dict, List, Optional, Any
 
@@ -469,6 +468,11 @@ class MultishotManagerDialog(BaseWidget):
 
             print(f"\n🔧 _set_shot called with: {shot_data}")
 
+            # Re-register MultishotRead instances - a script reload (Render button) or cut/paste
+            # leaves dead nodes in _node_instances, which breaks the node Build Path/Refresh buttons
+            from ..nodes.read_node import restore_multishot_instances
+            restore_multishot_instances(self.variable_manager)
+
             # ✅ CRITICAL: Save current shot's versions BEFORE switching
             if self.current_shot_key:
                 print(f"\n💾 [SET_SHOT] Saving versions for current shot: {self.current_shot_key}")
@@ -525,14 +529,17 @@ class MultishotManagerDialog(BaseWidget):
             # Update variable manager with ALL context variables
             # CRITICAL: Must update ALL context variables, not just shot info
             # Otherwise old values from script filename will persist (e.g., old seq/shot from filename)
+            # department/variance/version describe this script, not the shot: keep the script's
+            # values (version was reset to v001 on every Set Shot)
+            existing_context = self.variable_manager.get_context_variables()
             context_to_set = {
                 'project': shot_data['project'],
                 'ep': shot_data['ep'],
                 'seq': shot_data['seq'],
                 'shot': shot_data['shot'],
-                'department': shot_data.get('department', 'comp'),  # Default to 'comp' if not specified
-                'variance': shot_data.get('variance', ''),  # Default to empty if not specified
-                'version': shot_data.get('version', 'v001')  # Default to 'v001' if not specified
+                'department': shot_data.get('department') or existing_context.get('department') or 'comp',
+                'variance': shot_data.get('variance') or existing_context.get('variance') or '',
+                'version': shot_data.get('version') or existing_context.get('version') or 'v001'
             }
             self.variable_manager.set_context_variables(context_to_set)
             print(f"   Updated variable manager with context: {context_to_set}")
@@ -610,7 +617,6 @@ class MultishotManagerDialog(BaseWidget):
         try:
             import nuke
             import multishot.nodes.read_node as read_node_module
-            import json
 
             # Get current shot key
             current_shot_key = self.current_shot_key
@@ -619,26 +625,39 @@ class MultishotManagerDialog(BaseWidget):
                 return
 
             print(f"\n💾 [SAVE_VERSIONS] Saving versions for current shot: {current_shot_key}")
+            current_shot = self._find_shot_data(current_shot_key)
 
             # Find all MultishotRead nodes (not Write or Switch)
+            # Versions are stored on each node's own knobs - going through _node_instances
+            # silently skipped nodes whose instance pointed at a dead node after a script reload
             saved_count = 0
             for node in nuke.allNodes():
-                if self._is_multishot_read_node(node):  # Is a MultishotRead node
-                    node_name = node.name()
+                if not self._is_multishot_read_node(node):  # Is a MultishotRead node
+                    continue
 
-                    # Get node instance
-                    if node_name in read_node_module._node_instances:
-                        instance = read_node_module._node_instances[node_name]
+                node_name = node.name()
+                try:
+                    # Get current shot_version knob value
+                    current_version = node['shot_version'].value() if node.knob('shot_version') else 'v001'
+                    print(f"   📦 [SAVE_VERSIONS] Node: {node_name}, Current version: {current_version}")
 
-                        # Get current shot_version knob value
-                        current_version = node['shot_version'].value() if node.knob('shot_version') else 'v001'
-                        print(f"   📦 [SAVE_VERSIONS] Node: {node_name}, Current version: {current_version}")
+                    # Never chosen for this shot and still on the latest render: leave it unstored
+                    # so the shot keeps following new renders
+                    if current_shot and read_node_module.get_shot_version(node, current_shot_key) is None:
+                        latest_version = read_node_module.resolve_shot_version(
+                            node, current_shot_key, self._get_node_publish_dir(current_shot, node))
+                        if current_version == latest_version:
+                            print(f"   ⏭️  [SAVE_VERSIONS] {current_version} is the latest render, not stored")
+                            continue
 
-                        # Save this version for the current shot
-                        instance.set_version_for_shot(current_version, current_shot_key)
-                        print(f"   ✅ [SAVE_VERSIONS] Saved {current_version} for {current_shot_key}")
+                    # Save this version for the current shot
+                    read_node_module.set_shot_version(node, current_version, current_shot_key, None)
+                    print(f"   ✅ [SAVE_VERSIONS] Saved {current_version} for {current_shot_key}")
 
-                        saved_count += 1
+                    saved_count += 1
+
+                except Exception as e:
+                    self.logger.error(f"Error saving version for {node_name}: {e}")
 
             self.logger.info(f"Saved {saved_count} node versions for shot {current_shot_key}")
             print(f"✅ [SAVE_VERSIONS] Saved {saved_count} node versions\n")
@@ -653,7 +672,6 @@ class MultishotManagerDialog(BaseWidget):
         try:
             import nuke
             import multishot.nodes.read_node as read_node_module
-            import json
 
             shot_key = f"{shot_data['project']}_{shot_data['ep']}_{shot_data['seq']}_{shot_data['shot']}"
 
@@ -662,37 +680,30 @@ class MultishotManagerDialog(BaseWidget):
             # Find all MultishotRead nodes (not Write or Switch)
             updated_count = 0
             for node in nuke.allNodes():
-                if self._is_multishot_read_node(node):  # Is a MultishotRead node
-                    node_name = node.name()
-                    print(f"\n📦 [UPDATE_NODES] Processing node: {node_name}")
+                if not self._is_multishot_read_node(node):  # Is a MultishotRead node
+                    continue
 
-                    # Get node instance
-                    if node_name in read_node_module._node_instances:
-                        instance = read_node_module._node_instances[node_name]
+                node_name = node.name()
+                print(f"\n📦 [UPDATE_NODES] Processing node: {node_name}")
 
-                        # Debug: Show shot_versions knob content
-                        shot_versions_str = node['shot_versions'].value() if node.knob('shot_versions') else '{}'
-                        shot_versions = json.loads(shot_versions_str) if shot_versions_str else {}
-                        print(f"   📊 [UPDATE_NODES] shot_versions knob: {shot_versions}")
+                try:
+                    # Version for this shot from the node's own knobs: stored version, else the
+                    # latest render on disk. Going through _node_instances returned v001 for dead
+                    # nodes after a script reload
+                    version = read_node_module.resolve_shot_version(
+                        node, shot_key, self._get_node_publish_dir(shot_data, node))
+                    print(f"   🎯 [UPDATE_NODES] Version for {shot_key}: {version}")
 
-                        # Get version for this shot
-                        version = instance.get_version_for_shot(shot_key)
-                        print(f"   🎯 [UPDATE_NODES] Version for {shot_key}: {version}")
+                    # ✅ ONLY update shot_version knob
+                    # Path will update automatically via expressions like [value root.shot]
+                    current_version = node['shot_version'].value() if node.knob('shot_version') else 'v001'
+                    print(f"   ✏️  [UPDATE_NODES] shot_version knob: {current_version} -> {version}")
+                    read_node_module.apply_shot_version(node, version)
 
-                        # ✅ ONLY update shot_version knob
-                        # Path will update automatically via expressions like [value root.shot]
-                        current_version = node['shot_version'].value() if node.knob('shot_version') else 'v001'
-                        print(f"   📝 [UPDATE_NODES] Current shot_version knob: {current_version}")
-                        print(f"   ✏️  [UPDATE_NODES] Setting shot_version knob to: {version}")
-                        node['shot_version'].setValue(version)
-                        print(f"   ✅ [UPDATE_NODES] shot_version knob set to: {node['shot_version'].value()}")
+                    updated_count += 1
 
-                        # ❌ DO NOT rebuild path - expressions handle it automatically!
-                        # instance.build_expression_path()
-
-                        updated_count += 1
-                    else:
-                        print(f"   ⚠️  [UPDATE_NODES] Node '{node_name}' not in _node_instances!")
+                except Exception as e:
+                    self.logger.error(f"Error updating version for {node_name}: {e}")
 
             self.logger.info(f"Updated {updated_count} nodes for shot {shot_key} (version knobs only)")
 
@@ -1202,6 +1213,20 @@ class MultishotManagerDialog(BaseWidget):
         registered = self.variable_manager.config_manager.get('projects', {}).get(shot_data.get('project'), {})
         roots.update(registered)
         return roots
+
+    def _find_shot_data(self, shot_key):
+        """Find a shot in the shot list by key (e.g., EGA_Ep02_sq0380_SH3370)."""
+        for shot_data in self.shots_data:
+            if f"{shot_data['project']}_{shot_data['ep']}_{shot_data['seq']}_{shot_data['shot']}" == shot_key:
+                return shot_data
+        return None
+
+    def _get_node_publish_dir(self, shot_data, node):
+        """Publish directory of a MultishotRead node's department for a shot (under the shot's IMG_ROOT)."""
+        import multishot.nodes.read_node as read_node_module
+
+        department = node['department'].value() if node.knob('department') else 'lighting'
+        return read_node_module.get_publish_dir(self._get_shot_roots(shot_data)['IMG_ROOT'], shot_data, department)
 
     def _apply_project_roots(self, shot_data):
         """Set the script PROJ_ROOT and IMG_ROOT to the shot's project roots."""
@@ -1761,74 +1786,29 @@ class MultishotManagerDialog(BaseWidget):
                 )
                 return
 
-            # Get root variables
-            proj_root = self.variable_manager.get_variable('PROJ_ROOT')
-            if not proj_root:
-                QtWidgets.QMessageBox.warning(
-                    self,
-                    "Missing Variable",
-                    "PROJ_ROOT not set. Please configure in Variables dialog."
-                )
-                return
-
-            # Process each shot in the table
+            # Process each shot in the list
+            # (the table only holds row numbers, so reading shot keys from it found no shots)
             updated_count = 0
             error_count = 0
 
-            for row in range(self.shots_table.rowCount()):
-                shot_label = self.shots_table.item(row, 0)
-                if not shot_label:
-                    continue
+            for shot_data in self.shots_data:
+                shot_key = f"{shot_data['project']}_{shot_data['ep']}_{shot_data['seq']}_{shot_data['shot']}"
 
-                shot_key = shot_label.data(QtCore.Qt.UserRole)
-                if not shot_key:
-                    continue
-
-                # Parse shot key (format: "project_ep_seq_shot")
-                parts = shot_key.split('_')
-                if len(parts) < 4:
-                    continue
-
-                project = parts[0]
-                ep = parts[1]
-                seq = parts[2]
-                shot = '_'.join(parts[3:])  # Handle shots with underscores
-
-                # For each MultishotRead node, find latest version
+                # For each MultishotRead node, find the latest version that contains its image
                 for node in multishot_nodes:
                     try:
-                        # Get department from node
-                        department = node['department'].value() if node.knob('department') else None
-                        if not department:
-                            continue
-
-                        # Build path to department directory
-                        dept_path = os.path.join(
-                            proj_root,
-                            project,
-                            "all",
-                            "scene",
-                            ep,
-                            seq,
-                            shot,
-                            department,
-                            "publish"
+                        # Renders are under the shot's IMG_ROOT (e.g. EGA -> Y:/), not PROJ_ROOT
+                        versions = read_node_module.find_layer_versions(
+                            self._get_node_publish_dir(shot_data, node),
+                            read_node_module.get_file_pattern(node)
                         )
 
-                        # Scan for versions
-                        if os.path.exists(dept_path):
-                            versions = self.scanner.scan_versions(dept_path)
-
-                            if versions:
-                                # Get latest version
-                                latest_version = self.scanner.get_latest_version(versions)
-
-                                # Update node's version for this shot
-                                if node.name() in read_node_module._node_instances:
-                                    instance = read_node_module._node_instances[node.name()]
-                                    instance.set_version_for_shot(latest_version, shot_key)
-                                    updated_count += 1
-                                    self.logger.info(f"Updated {node.name()} to {latest_version} for shot {shot_key}")
+                        if versions:
+                            # Store on the node's knobs; nodes switch now if this is the active shot
+                            latest_version = versions[-1]
+                            read_node_module.set_shot_version(node, latest_version, shot_key, self.current_shot_key)
+                            updated_count += 1
+                            self.logger.info(f"Updated {node.name()} to {latest_version} for shot {shot_key}")
 
                     except Exception as e:
                         self.logger.error(f"Error updating node {node.name()} for shot {shot_key}: {e}")
@@ -2028,17 +2008,10 @@ class VersionSettingDialog(QtWidgets.QDialog):
             # Find all MultishotRead nodes (not Write or Switch)
             idx = 0
 
-            # Debug: Show all registered instances
-            self.logger.info(f"Registered node instances: {list(read_node_module._node_instances.keys())}")
-
             for node in all_nodes:
                 # Check if it's a MultishotRead node (not Write or Switch)
                 if self._is_multishot_read_node(node):
                     self.logger.info(f"Found MultishotRead node: {node.name()}")
-
-                    # Debug: Check if node is in instances
-                    in_instances = node.name() in read_node_module._node_instances
-                    self.logger.info(f"  Node '{node.name()}' in _node_instances: {in_instances}")
 
                     row = self.nodes_table.rowCount()
                     self.nodes_table.insertRow(row)
@@ -2060,30 +2033,30 @@ class VersionSettingDialog(QtWidgets.QDialog):
                     # Column 3: Version dropdown
                     version_combo = QtWidgets.QComboBox()
 
-                    # Get current version for this shot
-                    if node.name() in read_node_module._node_instances:
-                        instance = read_node_module._node_instances[node.name()]
-                        current_version = instance.get_version_for_shot(self.shot_key)
-                    else:
-                        current_version = 'v001'
-
-                    # Scan actual versions from directory
+                    # Scan versions on disk that contain this node's image
                     versions = self._scan_versions_for_node(node)
+
+                    # Current version for this shot: stored on the node, else the latest render
+                    current_version = read_node_module.get_shot_version(node, self.shot_key)
+                    if not current_version:
+                        current_version = versions[-1] if versions else 'v001'
+
                     if not versions:
                         # Fallback to default list if scan fails
                         versions = [f"v{str(i).zfill(3)}" for i in range(1, 21)]
                         self.logger.warning(f"Could not scan versions for {node.name()}, using default list")
 
+                    # Keep the current version selected even if its folder is missing,
+                    # instead of falling back to the oldest version
+                    if current_version not in versions:
+                        versions = sorted(versions + [current_version], key=read_node_module.version_sort_key)
+
                     version_combo.addItems(versions)
+                    version_combo.setCurrentText(current_version)
 
-                    # Set current version if it exists in the list
-                    if current_version in versions:
-                        version_combo.setCurrentText(current_version)
-                    elif versions:
-                        version_combo.setCurrentText(versions[0])
-
-                    # Store node reference in combo box
+                    # Store node reference and starting version (Apply only saves changed rows)
                     version_combo.setProperty('node', node)
+                    version_combo.setProperty('initial_version', current_version)
 
                     self.nodes_table.setCellWidget(row, 3, version_combo)
 
@@ -2097,21 +2070,20 @@ class VersionSettingDialog(QtWidgets.QDialog):
             self.logger.error(f"Error loading nodes: {e}")
 
     def _scan_versions_for_node(self, node):
-        """Scan available versions for a node from the directory.
+        """Scan versions on disk that contain the node's image.
 
         Args:
             node: Nuke node to scan versions for
 
         Returns:
-            List of version strings (e.g., ['v001', 'v002', 'v003'])
+            List of version strings, oldest first (e.g., ['v001', 'v002', 'v003'])
         """
         try:
-            import os
+            import multishot.nodes.read_node as read_node_module
             from ..core.variables import VariableManager
 
             # Get node properties
             department = node['department'].value() if node.knob('department') else 'lighting'
-            layer = node['layer'].value() if node.knob('layer') else 'MASTER_CHAR_A'
 
             # Get variable manager to resolve paths
             vm = VariableManager()
@@ -2121,49 +2093,18 @@ class VersionSettingDialog(QtWidgets.QDialog):
             project = self.shot_data.get('project', '')
             registered = vm.config_manager.get('projects', {}).get(project, {})
             img_root = registered.get('IMG_ROOT') or vm.get_variable('IMG_ROOT')
-            ep = self.shot_data.get('ep', '')
-            seq = self.shot_data.get('seq', '')
-            shot = self.shot_data.get('shot', '')
 
-            if not all([img_root, project, ep, seq, shot]):
+            if not all([img_root, project, self.shot_data.get('ep'), self.shot_data.get('seq'), self.shot_data.get('shot')]):
                 self.logger.warning(f"Missing path components for version scan")
                 return []
 
-            # Build publish directory path
-            publish_dir = os.path.join(
-                img_root,
-                project,
-                'all',
-                'scene',
-                ep,
-                seq,
-                shot,
-                department,
-                'publish'
-            )
+            publish_dir = read_node_module.get_publish_dir(img_root, self.shot_data, department)
+            file_pattern = read_node_module.get_file_pattern(node)
 
-            self.logger.info(f"Scanning versions in: {publish_dir}")
+            self.logger.info(f"Scanning versions of {file_pattern} in: {publish_dir}")
 
-            # Check if directory exists
-            if not os.path.exists(publish_dir):
-                self.logger.warning(f"Publish directory does not exist: {publish_dir}")
-                return []
-
-            # Scan for version directories (v001, v002, etc.)
-            versions = []
-            for item in os.listdir(publish_dir):
-                item_path = os.path.join(publish_dir, item)
-                # Check if it's a directory and matches version pattern (v###)
-                if os.path.isdir(item_path) and item.startswith('v') and len(item) == 4:
-                    try:
-                        # Verify it's a valid version number
-                        int(item[1:])
-                        versions.append(item)
-                    except ValueError:
-                        continue
-
-            # Sort versions
-            versions.sort()
+            # Only versions that contain this image (e.g. skips v001 when its MASTER_BG_A folder is empty)
+            versions = read_node_module.find_layer_versions(publish_dir, file_pattern)
 
             self.logger.info(f"Found {len(versions)} versions: {versions}")
             return versions
@@ -2194,17 +2135,19 @@ class VersionSettingDialog(QtWidgets.QDialog):
         try:
             import multishot.nodes.read_node as read_node_module
 
-            # Apply version changes to all nodes
+            # Apply version changes to the rows the user changed. Untouched rows keep their stored
+            # version, or stay unstored so the shot keeps following the latest render
             for row in range(self.nodes_table.rowCount()):
                 version_combo = self.nodes_table.cellWidget(row, 3)
                 if version_combo:
                     node = version_combo.property('node')
                     version = version_combo.currentText()
+                    if version == version_combo.property('initial_version'):
+                        continue
 
-                    # Get node instance and set version for this shot
-                    if node.name() in read_node_module._node_instances:
-                        instance = read_node_module._node_instances[node.name()]
-                        instance.set_version_for_shot(version, self.shot_key)
+                    # Store on the node's knobs (_node_instances can hold dead nodes).
+                    # The dialog opens after Set Shot, so this shot is the active one
+                    read_node_module.set_shot_version(node, version, self.shot_key, self.shot_key)
 
             self.logger.info(f"Applied version changes for shot {self.shot_key}")
 

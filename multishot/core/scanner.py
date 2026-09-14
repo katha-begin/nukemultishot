@@ -14,7 +14,7 @@ from collections import defaultdict
 from ..utils.logging import get_logger
 from ..utils.config import ConfigManager
 from .paths import PathResolver
-from .context import ContextDetector
+from .context import ContextDetector, EPISODE_PATTERN, SEQUENCE_PATTERN, SHOT_PATTERN
 
 class DirectoryScanner:
     """
@@ -155,14 +155,14 @@ class DirectoryScanner:
         """Compile regex patterns for directory matching."""
         patterns = {}
 
-        # Episode pattern: Ep01, Ep02, etc.
-        patterns['episode'] = re.compile(r'^Ep\d+$', re.IGNORECASE)
+        # Episode pattern: Ep01, Ep02, Ep01A, etc.
+        patterns['episode'] = re.compile(rf'^{EPISODE_PATTERN}$', re.IGNORECASE)
 
-        # Sequence pattern: sq0110, sq0120, etc.
-        patterns['sequence'] = re.compile(r'^sq\d+$', re.IGNORECASE)
+        # Sequence pattern: sq0110, sq0120, sq0110A, seq01A, etc.
+        patterns['sequence'] = re.compile(rf'^{SEQUENCE_PATTERN}$', re.IGNORECASE)
 
-        # Shot pattern: SH0520, SH0530, etc.
-        patterns['shot'] = re.compile(r'^SH\d+$', re.IGNORECASE)
+        # Shot pattern: SH0520, SH0530, SH0020A, etc.
+        patterns['shot'] = re.compile(rf'^{SHOT_PATTERN}$', re.IGNORECASE)
 
         # Version pattern: v001, v002, v001_001, etc.
         patterns['version'] = re.compile(r'^v\d+(?:_\d+)?$', re.IGNORECASE)
