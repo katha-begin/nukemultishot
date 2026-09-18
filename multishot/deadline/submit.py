@@ -344,65 +344,45 @@ def get_environment_variables():
     # CRITICAL: Render nodes are Linux, so use Linux paths for environment variables
     # Deadline path mapping only applies to file paths in .nk scripts, NOT to env vars!
 
-    # NUKE_PATH - critical for loading init.py
-    # Use Linux path for render nodes
-    multishot_path_linux = '/mnt/ppr_dev_t/pipeline/development/nuke/nukemultishot'
-    env_vars['NUKE_PATH'] = multishot_path_linux
+    # NUKE_PATH - critical. Without it init.py never loads on the render node,
+    # which means no filenameFilter, which means every Windows path in the
+    # script reaches the farm untranslated.
+    #
+    # Derived from where this package actually lives rather than hardcoded, so a
+    # move (or a release/ vs development/ switch) does not silently keep pointing
+    # the farm at the old checkout.
+    from ..core.pathmap import to_linux
 
-    # OCIO - color management config
+    package_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    env_vars['NUKE_PATH'] = to_linux(package_root.replace('\\', '/'))
+
+    # OCIO - only when the script actually asks for a specific config.
+    #
+    # We deliberately do NOT force a studio default onto scripts that do not set
+    # customOCIOConfigPath. A Write node's display/view and a Viewer's
+    # viewerProcess are enums validated against whatever OCIO config is live at
+    # script-parse time. Forcing the ACES studio config onto a script authored
+    # under Nuke's built-in config makes those values illegal and Nuke aborts
+    # during the parse with:
+    #
+    #     ERROR: Bad value for display : default
+    #     ERROR: Bad value for viewerProcess : sRGB (default)
+    #
+    # which is unfixable from Python because the parse dies first. Verified on
+    # the farm: the same shot that failed this way rendered cleanly once OCIO was
+    # left unset and the script's own colour management was respected.
     try:
         import nuke
-        # Try to get OCIO from script first
         ocio_knob = nuke.root().knob('customOCIOConfigPath')
         if ocio_knob and ocio_knob.value():
-            # Convert Windows path to Linux path for render nodes
-            ocio_path = ocio_knob.value()
-            print("DEBUG: Original OCIO path from script: {}".format(ocio_path))
-
-            # Apply path mapping for all drive letters (case-insensitive)
-            # Check both uppercase and lowercase drive letters
-            path_mappings = {
-                'T:/': '/mnt/ppr_dev_t/',
-                'T:\\': '/mnt/ppr_dev_t/',
-                't:/': '/mnt/ppr_dev_t/',
-                't:\\': '/mnt/ppr_dev_t/',
-                'V:/': '/mnt/igloo_swa_v/',
-                'V:\\': '/mnt/igloo_swa_v/',
-                'v:/': '/mnt/igloo_swa_v/',
-                'v:\\': '/mnt/igloo_swa_v/',
-                'W:/': '/mnt/igloo_swa_w/',
-                'W:\\': '/mnt/igloo_swa_w/',
-                'w:/': '/mnt/igloo_swa_w/',
-                'w:\\': '/mnt/igloo_swa_w/',
-                'X:/': '/mnt/igloo_ega_x/',
-                'X:\\': '/mnt/igloo_ega_x/',
-                'x:/': '/mnt/igloo_ega_x/',
-                'x:\\': '/mnt/igloo_ega_x/',
-                'Y:/': '/mnt/igloo_ega_y/',
-                'Y:\\': '/mnt/igloo_ega_y/',
-                'y:/': '/mnt/igloo_ega_y/',
-                'y:\\': '/mnt/igloo_ega_y/'
-            }
-
-            for win_path, linux_path in path_mappings.items():
-                if ocio_path.startswith(win_path):
-                    ocio_path = ocio_path.replace(win_path, linux_path).replace('\\', '/')
-                    print("DEBUG: Converted OCIO path to Linux: {}".format(ocio_path))
-                    break
-
+            ocio_path = to_linux(ocio_knob.value())
             env_vars['OCIO'] = ocio_path
-            print("DEBUG: Setting OCIO environment variable to: {}".format(ocio_path))
+            print("Multishot: OCIO from script -> {}".format(ocio_path))
         else:
-            # Use default OCIO path (Linux path for render nodes)
-            ocio_path_linux = '/mnt/ppr_dev_t/pipeline/ocio/aces_2.0/studio-config-v1.0.0_aces-v1.3_ocio-v2.0.ocio'
-            env_vars['OCIO'] = ocio_path_linux
-            print("DEBUG: No customOCIOConfigPath in script, using default: {}".format(ocio_path_linux))
+            print("Multishot: script sets no customOCIOConfigPath; leaving OCIO "
+                  "unset so the script's own colour management is used")
     except Exception as e:
-        # Fallback to default OCIO path
-        ocio_path_linux = '/mnt/ppr_dev_t/pipeline/ocio/aces_2.0/studio-config-v1.0.0_aces-v1.3_ocio-v2.0.ocio'
-        env_vars['OCIO'] = ocio_path_linux
-        print("DEBUG: Error getting OCIO from script: {}".format(e))
-        print("DEBUG: Using default OCIO: {}".format(ocio_path_linux))
+        print("Multishot: could not read OCIO from script ({}); leaving OCIO unset".format(e))
 
     return env_vars
 
@@ -453,23 +433,59 @@ def _patch_deadline_submission():
                         # Get environment variables to add
                         env_vars = get_environment_variables()
 
-                        # Append environment variables to job info
-                        env_lines = []
-                        env_index = 0
-                        for key, value in env_vars.items():
-                            env_line = "EnvironmentKeyValue{}={}={}".format(env_index, key, value)
-                            env_lines.append(env_line)
-                            print("  Adding: {} = {}".format(key, value))
-                            env_index += 1
+                        # The job info file usually already carries environment
+                        # entries written by the studio submitter (OCIO,
+                        # NUKE_DISABLE_GPU_ACCELERATION, DISPLAY, ...). We must
+                        # merge with them rather than append:
+                        #
+                        #   * Deadline stops reading EnvironmentKeyValue entries
+                        #     at the first missing index, so a gap silently
+                        #     discards every remaining variable - verified on the
+                        #     farm, where a gap at index 0 dropped OCIO entirely.
+                        #   * Blindly restarting at 0 overwrote the submitter's
+                        #     own entries, which is how NUKE_DISABLE_GPU_ACCELERATION
+                        #     was being lost on every job.
+                        #
+                        # So: parse what is there, merge ours over the top, and
+                        # rewrite the whole block contiguously from 0.
+                        existing = {}
+                        kept_lines = []
+                        for line in job_info_content.splitlines():
+                            stripped = line.strip()
+                            if stripped.startswith('EnvironmentKeyValue'):
+                                _, _, assignment = stripped.partition('=')
+                                key, _, value = assignment.partition('=')
+                                if key:
+                                    existing[key] = value
+                            elif stripped.lower().startswith('usejobenvironmentonly'):
+                                continue
+                            else:
+                                kept_lines.append(line)
 
-                        # Add UseJobEnvironmentOnly=false to merge with worker environment
+                        merged = dict(existing)
+                        for key, value in env_vars.items():
+                            if key in existing and existing[key] != value:
+                                print("  Overriding: {} = {} (was {})".format(
+                                    key, value, existing[key]))
+                            else:
+                                print("  Adding: {} = {}".format(key, value))
+                            merged[key] = value
+
+                        env_lines = []
+                        for index, key in enumerate(sorted(merged)):
+                            env_lines.append("EnvironmentKeyValue{}={}={}".format(
+                                index, key, merged[key]))
+
+                        # Merge with the worker environment rather than replacing it
                         env_lines.append("UseJobEnvironmentOnly=false")
                         print("  Set: UseJobEnvironmentOnly = false (merge with worker env)")
+                        print("  Total environment entries: {}".format(len(merged)))
 
-                        # Write back to file
-                        with open(job_info_file, 'a') as f:
-                            f.write('\n')
-                            f.write('\n'.join(env_lines))
+                        # Rewrite the file so the indices stay contiguous
+                        while kept_lines and not kept_lines[-1].strip():
+                            kept_lines.pop()
+                        with open(job_info_file, 'w') as f:
+                            f.write('\n'.join(kept_lines + env_lines))
                             f.write('\n')
 
                         print("=" * 70 + "\n")
@@ -622,34 +638,30 @@ def submit_to_deadline():
             # STEP 1: Ensure all variables are embedded in the script
             ensure_variables_before_submission()
 
-            # STEP 2: Convert Windows paths to Linux paths
-            backup = convert_paths_to_linux()
+            # NOTE: The script is submitted exactly as the artist saved it.
+            #
+            # We used to rewrite PROJ_ROOT/IMG_ROOT to Linux paths, delete every
+            # Viewer node, and then nuke.scriptSave() over the artist's own file.
+            # That was destructive - the restore afterwards only put the knob
+            # values back in memory and never re-saved, so the file left on disk
+            # kept Linux roots and had lost its Viewers, which then broke the
+            # shot for the next person to open it on Windows.
+            #
+            # Path translation now happens on the render node instead, via the
+            # filenameFilter installed by init.py (see multishot.core.pathmap).
+            # That runs before the .nk is parsed, so it also covers nodes like
+            # Camera3/ReadGeo that load their file during parsing - which no
+            # callback or post-load fixup could ever reach.
+            #
+            # For this to work the farm job must carry NUKE_PATH; that is what
+            # _patch_deadline_submission() below injects.
 
-            # STEP 3: Fix Read node frame ranges
-            # ❌ DISABLED: This was forcing expressions even when user wants static values!
-            # If Read nodes have static frame ranges, we should NOT overwrite them.
-            # fix_read_node_frame_ranges_for_submission()
-
-            # STEP 4: Delete Viewer nodes (they cause issues in batch mode)
-            delete_viewer_nodes_for_batch_mode()
-
-            # STEP 5: SAVE THE SCRIPT with Linux paths
-            print("\n" + "=" * 70)
-            print("MULTISHOT: Saving script with Linux paths for farm")
-            print("=" * 70)
-            nuke.scriptSave()
-            print("Script saved: {}".format(nuke.root().name()))
-            print("=" * 70 + "\n")
-
-            # STEP 6: Patch the submission to add our environment variables
+            # STEP 2: Patch the submission to add our environment variables
             _patch_deadline_submission()
 
-            # STEP 7: Open submission dialog
+            # STEP 3: Open submission dialog
             print("Opening Deadline submission dialog...")
             SubmitNukeToDeadline.SubmitToDeadline()
-
-            # STEP 8: Restore Windows paths after submission
-            restore_windows_paths(backup)
 
         except ImportError as e:
             error_msg = (

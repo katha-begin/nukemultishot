@@ -8,6 +8,35 @@ directory is in the NUKE_PATH.
 import os
 import sys
 
+# Make the multishot package importable before anything else needs it. init.py
+# previously only did this inside initialize_multishot(), which left batch mode
+# unable to import anything from the package.
+_MULTISHOT_DIR = os.path.dirname(os.path.abspath(__file__))
+if _MULTISHOT_DIR not in sys.path:
+    sys.path.insert(0, _MULTISHOT_DIR)
+
+
+def install_path_mapping():
+    """Register the Windows->Linux filenameFilter as early as possible.
+
+    This has to happen at init.py import time, before Nuke opens the .nk. Nodes
+    with ``read_from_file true`` (Camera3, ReadGeo, ...) resolve and load their
+    file *during* the script parse, so the onScriptLoad callback - which only
+    runs once parsing has finished - is far too late to help them. A render will
+    already have failed with "No such file or directory" by then.
+    """
+    try:
+        from multishot.core.pathmap import install_filename_filter
+        if install_filename_filter(verbose=True):
+            print("Multishot: Windows->Linux path mapping active (filenameFilter)")
+    except Exception as e:
+        # Never let this stop Nuke from starting; a clear message is worth more
+        # than a traceback nobody reads on a render node.
+        print("Multishot: WARNING - could not install path mapping: {}".format(e))
+
+
+install_path_mapping()
+
 # DEBUG: Print OCIO environment variable immediately when init.py loads
 print("\n" + "=" * 80)
 print("MULTISHOT DEBUG: Checking OCIO environment variable")

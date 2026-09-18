@@ -11,9 +11,22 @@ from typing import Optional, List
 from ..utils.logging import get_logger
 
 
+def _join_under_root(root: str, *parts: str) -> str:
+    """Join path parts under a root, keeping forward slashes.
+
+    os.path.join() must not be used here. Stripping the trailing slash from
+    "V:/" leaves "V:", and os.path.join("V:", "SWA") returns "V:SWA" - a
+    drive-RELATIVE path meaning "SWA under the current directory on V:", not
+    "V:\\SWA". Farm scripts were being written to, and submitted from, whatever
+    the current directory on that drive happened to be.
+    """
+    cleaned = root.replace('\\', '/').rstrip('/')
+    return '/'.join([cleaned] + [str(part).strip('/') for part in parts])
+
+
 class FarmScriptManager:
     """Manages farm script creation and versioning."""
-    
+
     MAX_VERSIONS = 5  # Keep last 5 versions
     
     def __init__(self):
@@ -35,14 +48,9 @@ class FarmScriptManager:
             Farm:     V:/SWA/all/scene/Ep02/sq0010/SH0010/comp/farm/Ep02_sq0010_SH0010_comp_v004_farm.001.nk
         """
         try:
-            # Get PROJ_ROOT
-            proj_root = shot_data.get('PROJ_ROOT', 'V:/')
-            if proj_root.endswith('/') or proj_root.endswith('\\'):
-                proj_root = proj_root[:-1]
-            
             # Build farm directory path
-            farm_dir = os.path.join(
-                proj_root,
+            farm_dir = _join_under_root(
+                shot_data.get('PROJ_ROOT', 'V:/'),
                 shot_data['project'],
                 'all',
                 'scene',
@@ -52,7 +60,7 @@ class FarmScriptManager:
                 'comp',
                 'farm'
             )
-            
+
             # Get original filename without extension
             original_filename = os.path.basename(original_script_path)
             base_name, ext = os.path.splitext(original_filename)
@@ -65,7 +73,9 @@ class FarmScriptManager:
             
             # Build full path
             farm_filename = f"{farm_base}.{version_num:03d}{ext}"
-            farm_path = os.path.join(farm_dir, farm_filename)
+            # Forward slashes: this value goes into nuke.scriptSaveAs() and into
+            # Deadline's SceneFile, neither of which wants Windows separators.
+            farm_path = f"{farm_dir}/{farm_filename}"
             
             self.logger.info(f"Farm script path: {farm_path}")
             return farm_path
@@ -140,12 +150,8 @@ class FarmScriptManager:
         Returns:
             Farm directory path
         """
-        proj_root = shot_data.get('PROJ_ROOT', 'V:/')
-        if proj_root.endswith('/') or proj_root.endswith('\\'):
-            proj_root = proj_root[:-1]
-        
-        farm_dir = os.path.join(
-            proj_root,
+        return _join_under_root(
+            shot_data.get('PROJ_ROOT', 'V:/'),
             shot_data['project'],
             'all',
             'scene',
@@ -155,8 +161,6 @@ class FarmScriptManager:
             'comp',
             'farm'
         )
-        
-        return farm_dir
 
     def _convert_windows_to_linux_path(self, path: str) -> str:
         """
@@ -168,30 +172,12 @@ class FarmScriptManager:
         Returns:
             Linux path (e.g., /mnt/igloo_swa_v/SWA/...)
         """
-        # Path mappings
-        path_mappings = {
-            'V:/': '/mnt/igloo_swa_v/',
-            'V:\\': '/mnt/igloo_swa_v/',
-            'W:/': '/mnt/igloo_swa_w/',
-            'W:\\': '/mnt/igloo_swa_w/',
-            'X:/': '/mnt/igloo_ega_x/',
-            'X:\\': '/mnt/igloo_ega_x/',
-            'Y:/': '/mnt/igloo_ega_y/',
-            'Y:\\': '/mnt/igloo_ega_y/',
-            'T:/': '/mnt/ppr_dev_t/',
-            'T:\\': '/mnt/ppr_dev_t/'
-        }
+        # Uses the shared table in multishot.core.pathmap. This local copy used
+        # to list uppercase drives only, so a path that happened to be spelled
+        # "v:/SWA/..." was handed to the farm unconverted.
+        from ..core.pathmap import to_linux
 
-        converted_path = path
-        for win_path, linux_path in path_mappings.items():
-            if converted_path.startswith(win_path):
-                converted_path = converted_path.replace(win_path, linux_path, 1)
-                break
-
-        # Replace backslashes with forward slashes
-        converted_path = converted_path.replace('\\', '/')
-
-        return converted_path
+        return to_linux(path).replace('\\', '/')
 
     def remove_all_callbacks(self):
         """
