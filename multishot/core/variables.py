@@ -181,7 +181,7 @@ try:
                     print("  Write '{}': {} -> {}".format(node.name(), original_path, file_path))
 
         # Replace paths in all ReadGeo nodes
-        for node in nuke.allNodes('ReadGeo') + nuke.allNodes('ReadGeo2'):
+        for node in nuke.allNodes('ReadGeo') + nuke.allNodes('ReadGeo2') + nuke.allNodes('ReadGeo3'):
             if node.knob('file'):
                 file_path = node['file'].value()
                 original_path = file_path
@@ -194,8 +194,10 @@ try:
                     replaced_count += 1
                     print("  ReadGeo '{}': {} -> {}".format(node.name(), original_path, file_path))
 
-        # Replace paths in all Camera nodes
-        for node in nuke.allNodes('Camera') + nuke.allNodes('Camera2'):
+        # Replace paths in all Camera nodes.
+        # Camera3 is what Nuke 13+ writes - omitting it meant every modern
+        # camera kept its Windows path on the farm.
+        for node in nuke.allNodes('Camera') + nuke.allNodes('Camera2') + nuke.allNodes('Camera3'):
             if node.knob('file'):
                 file_path = node['file'].value()
                 original_path = file_path
