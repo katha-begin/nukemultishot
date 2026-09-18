@@ -368,6 +368,56 @@ def merge_job_environment(job_info_content, env_vars, drop_keys=()):
     return kept_lines, env_lines
 
 
+def disable_batch_mode_in_plugin_info(plugin_info_file):
+    """Force BatchMode=False in a Deadline plugin info file.
+
+    With BatchMode=True this Deadline version's Nuke plugin omits both
+    ``-X <WriteNode>`` and ``-F <range>`` from the command line (Nuke.py, the
+    ``if not self.BatchMode`` guards around the render arguments). Nuke then
+    renders EVERY Write node over the WHOLE script range, ignoring the task's
+    frame chunk entirely:
+
+        Plugin rendering frame(s): 1001-1005
+        INFO: Argument: -V 2 -x "<scene>"      <- no -X, no -F
+        STDOUT: Frame 1001 (1 of 100)          <- 100 frames, not 5
+
+    which also writes output for unrelated Write nodes in the script. Returns
+    True if the file was changed.
+    """
+    try:
+        with open(plugin_info_file, 'r') as handle:
+            lines = handle.read().splitlines()
+    except Exception as e:
+        print("  Warning: could not read plugin info file: {}".format(e))
+        return False
+
+    changed = False
+    updated = []
+    for line in lines:
+        if line.strip().lower().startswith('batchmode='):
+            if line.strip().lower() != 'batchmode=false':
+                updated.append('BatchMode=False')
+                changed = True
+                continue
+        updated.append(line)
+
+    if not any(l.strip().lower().startswith('batchmode=') for l in updated):
+        updated.append('BatchMode=False')
+        changed = True
+
+    if changed:
+        try:
+            with open(plugin_info_file, 'w') as handle:
+                handle.write('\n'.join(updated))
+                handle.write('\n')
+            print("  Set BatchMode=False so Deadline passes -X <WriteNode> and "
+                  "-F <frame range> (otherwise every Write renders the full range)")
+        except Exception as e:
+            print("  Warning: could not update plugin info file: {}".format(e))
+            return False
+    return changed
+
+
 def script_declares_ocio_config():
     """True when the .nk names its own OCIO config via customOCIOConfigPath.
 
@@ -533,6 +583,13 @@ def _patch_deadline_submission():
                         with open(job_info_file, 'w') as f:
                             f.write('\n'.join(kept_lines + env_lines))
                             f.write('\n')
+
+                        # args[1] is the plugin info file for this submission.
+                        plugin_info_file = args[1] if len(args) > 1 else None
+                        if (isinstance(plugin_info_file, str)
+                                and plugin_info_file.endswith('.job')
+                                and os.path.exists(plugin_info_file)):
+                            disable_batch_mode_in_plugin_info(plugin_info_file)
 
                         print("=" * 70 + "\n")
 

@@ -95,3 +95,41 @@ class TestMergeJobEnvironment(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestDisableBatchMode(unittest.TestCase):
+    """BatchMode=True makes Deadline drop -X <WriteNode> and -F <range>."""
+
+    def _write(self, body):
+        import tempfile
+        fd, path = tempfile.mkstemp(suffix=".job", text=True)
+        with os.fdopen(fd, "w") as handle:
+            handle.write(body)
+        self.addCleanup(lambda: os.path.exists(path) and os.remove(path))
+        return path
+
+    def test_true_is_flipped_to_false(self):
+        from multishot.deadline.submit import disable_batch_mode_in_plugin_info
+        path = self._write("SceneFile=/x/y.nk\nBatchMode=True\nWriteNode=W1\n")
+        self.assertTrue(disable_batch_mode_in_plugin_info(path))
+        self.assertIn("BatchMode=False", open(path).read())
+        self.assertNotIn("BatchMode=True", open(path).read())
+
+    def test_already_false_is_left_alone(self):
+        from multishot.deadline.submit import disable_batch_mode_in_plugin_info
+        path = self._write("SceneFile=/x/y.nk\nBatchMode=False\n")
+        self.assertFalse(disable_batch_mode_in_plugin_info(path))
+
+    def test_missing_entry_is_added(self):
+        from multishot.deadline.submit import disable_batch_mode_in_plugin_info
+        path = self._write("SceneFile=/x/y.nk\nWriteNode=W1\n")
+        self.assertTrue(disable_batch_mode_in_plugin_info(path))
+        self.assertIn("BatchMode=False", open(path).read())
+
+    def test_other_entries_survive(self):
+        from multishot.deadline.submit import disable_batch_mode_in_plugin_info
+        path = self._write("SceneFile=/x/y.nk\nBatchMode=True\nWriteNode=W1\nVersion=16.0\n")
+        disable_batch_mode_in_plugin_info(path)
+        content = open(path).read()
+        for entry in ("SceneFile=/x/y.nk", "WriteNode=W1", "Version=16.0"):
+            self.assertIn(entry, content)

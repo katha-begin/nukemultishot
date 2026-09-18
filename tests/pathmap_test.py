@@ -11,12 +11,19 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import multishot.core.pathmap as pathmap
 from multishot.core.pathmap import (
-    DRIVE_MAP,
+    DEFAULT_DRIVE_MAP as DRIVE_MAP,
     to_linux,
     to_windows,
     unmapped_drive,
 )
+
+# Pin the rules to the built-in table so the suite does not depend on whether a
+# Deadline client is installed on the machine running it.
+pathmap._cached_rules = sorted(
+    [(d, m) for d, m in DRIVE_MAP.items()], key=lambda r: len(r[0]), reverse=True)
+pathmap._cached_source = "built-in fallback table (pinned for tests)"
 from multishot.deadline.farm_script import FarmScriptManager, _join_under_root
 
 
