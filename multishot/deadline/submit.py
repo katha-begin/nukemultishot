@@ -329,6 +329,60 @@ def ensure_variables_before_submission():
         return False
 
 
+def merge_job_environment(job_info_content, env_vars, drop_keys=()):
+    """Merge env vars into an existing Deadline job info file's environment block.
+
+    Returns (kept_lines, env_lines) where env_lines is a fresh, contiguous
+    EnvironmentKeyValue block plus UseJobEnvironmentOnly.
+
+    Deadline stops reading EnvironmentKeyValue entries at the first missing
+    index, so the block must be renumbered from 0 with no gaps - appending or
+    restarting at 0 both silently discard variables.
+    """
+    existing = {}
+    kept_lines = []
+    for line in job_info_content.splitlines():
+        stripped = line.strip()
+        if stripped.startswith('EnvironmentKeyValue'):
+            _, _, assignment = stripped.partition('=')
+            key, _, value = assignment.partition('=')
+            if key:
+                existing[key] = value
+        elif stripped.lower().startswith('usejobenvironmentonly'):
+            continue
+        else:
+            kept_lines.append(line)
+
+    merged = dict(existing)
+    merged.update(env_vars)
+    for key in drop_keys:
+        merged.pop(key, None)
+
+    env_lines = ["EnvironmentKeyValue{}={}={}".format(index, key, merged[key])
+                 for index, key in enumerate(sorted(merged))]
+    env_lines.append("UseJobEnvironmentOnly=false")
+
+    while kept_lines and not kept_lines[-1].strip():
+        kept_lines.pop()
+
+    return kept_lines, env_lines
+
+
+def script_declares_ocio_config():
+    """True when the .nk names its own OCIO config via customOCIOConfigPath.
+
+    When it does not, the script is relying on whatever colour management it was
+    authored with (for this studio: Nuke's default OCIO config), and nothing
+    should override that on the render node.
+    """
+    try:
+        import nuke
+        knob = nuke.root().knob('customOCIOConfigPath')
+        return bool(knob and knob.value().strip())
+    except Exception:
+        return False
+
+
 def get_environment_variables():
     """
     Get environment variables that should be passed to Deadline render nodes.
@@ -448,42 +502,34 @@ def _patch_deadline_submission():
                         #
                         # So: parse what is there, merge ours over the top, and
                         # rewrite the whole block contiguously from 0.
-                        existing = {}
-                        kept_lines = []
-                        for line in job_info_content.splitlines():
-                            stripped = line.strip()
-                            if stripped.startswith('EnvironmentKeyValue'):
-                                _, _, assignment = stripped.partition('=')
-                                key, _, value = assignment.partition('=')
-                                if key:
-                                    existing[key] = value
-                            elif stripped.lower().startswith('usejobenvironmentonly'):
-                                continue
-                            else:
-                                kept_lines.append(line)
+                        #
+                        # The render must also follow the script's own colour
+                        # management. The studio submitter writes an
+                        # unconditional EnvironmentKeyValue0=OCIO=<ACES config>
+                        # onto every Nuke job; when the script never asked for
+                        # that config, the override makes its Write display/view
+                        # and Viewer viewerProcess values illegal and Nuke aborts
+                        # while parsing:
+                        #
+                        #     ERROR: Bad value for display : default
+                        #
+                        # Verified on the farm - the same shot fails with the
+                        # override and renders without it. Drop the override so
+                        # the .nk decides.
+                        drop_keys = []
+                        if not script_declares_ocio_config():
+                            drop_keys.append('OCIO')
 
-                        merged = dict(existing)
-                        for key, value in env_vars.items():
-                            if key in existing and existing[key] != value:
-                                print("  Overriding: {} = {} (was {})".format(
-                                    key, value, existing[key]))
-                            else:
-                                print("  Adding: {} = {}".format(key, value))
-                            merged[key] = value
+                        kept_lines, env_lines = merge_job_environment(
+                            job_info_content, env_vars, drop_keys=drop_keys)
 
-                        env_lines = []
-                        for index, key in enumerate(sorted(merged)):
-                            env_lines.append("EnvironmentKeyValue{}={}={}".format(
-                                index, key, merged[key]))
+                        for env_line in env_lines:
+                            print("  {}".format(env_line))
+                        if drop_keys:
+                            print("  Dropped {} - script declares no customOCIOConfigPath, "
+                                  "so its own colour management is used".format(
+                                      ", ".join(drop_keys)))
 
-                        # Merge with the worker environment rather than replacing it
-                        env_lines.append("UseJobEnvironmentOnly=false")
-                        print("  Set: UseJobEnvironmentOnly = false (merge with worker env)")
-                        print("  Total environment entries: {}".format(len(merged)))
-
-                        # Rewrite the file so the indices stay contiguous
-                        while kept_lines and not kept_lines[-1].strip():
-                            kept_lines.pop()
                         with open(job_info_file, 'w') as f:
                             f.write('\n'.join(kept_lines + env_lines))
                             f.write('\n')
