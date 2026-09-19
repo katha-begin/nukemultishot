@@ -9,6 +9,13 @@ The Multishot Manager reads a shot's frame range from
 and falls back to 1001-1100 when that file is missing (which is why shots show
 yellow in the Manager). This writes those files.
 
+That file is SHARED WITH MAYA - it is the context file Maya writes on a
+lighting publish, carrying render_settings, image_file_prefix, metadata and
+timeline_settings alongside the frame range. So this script never rewrites an
+existing file wholesale. New files are written in the same schema, containing
+only the shot_info block we can actually fill in; existing files are either
+left alone or have just their frame range corrected in place.
+
 Only the shot name and its duration are known here, not which sequence a shot
 belongs to, so each shot's directory is located by scanning the scene tree.
 Shots that cannot be found, or that appear under more than one sequence, are
@@ -18,11 +25,15 @@ Dry run (default - shows what it would do, writes nothing):
 
     python setup_shot_frame_ranges.py --proj-root X:/ --project EGA --ep Ep02
 
-Apply:
+Write the shots that have no context file yet:
 
     python setup_shot_frame_ranges.py --proj-root X:/ --project EGA --ep Ep02 --write
 
-Existing files are left alone unless --overwrite is given.
+Also correct the range inside files that already exist, keeping every other
+key Maya wrote:
+
+    python setup_shot_frame_ranges.py --proj-root X:/ --project EGA --ep Ep02 \
+        --write --update-existing
 """
 
 import argparse
@@ -414,14 +425,57 @@ def find_shot_dirs(scene_root, ep_filter=None):
     return found
 
 
-def build_payload(duration):
+def build_payload(ep, seq, shot, duration):
+    """A new context file containing only what we actually know.
+
+    This file is shared with Maya, so it uses the shared schema's shot_info
+    block rather than a Nuke-only key. Deliberately NOT written: metadata,
+    render_settings, shot_attributes and timeline_settings. Those describe a
+    Maya lighting publish (scene file, renderer, image prefix, export
+    timestamp) and inventing them would put a file on disk claiming to be an
+    export that never happened. Maya fills them in when the shot is published;
+    this only seeds the frame range so Nuke stops falling back to 1001-1100.
+    """
     first, last = frame_range(duration)
     return {
-        "frameRange": {
-            "start": first,
-            "end": last,
+        "shot_info": {
+            "episode": ep,
+            "sequence": seq,
+            "shot": shot,
+            "start_frame": first,
+            "end_frame": last,
+            "frame_count": duration,
         }
     }
+
+
+def update_existing(path, ep, seq, shot, duration):
+    """Update only the frame range inside an existing shared context file.
+
+    Everything else - render_settings, image_file_prefix, metadata, fps - is
+    left exactly as Maya wrote it. Returns (changed, before, after).
+    """
+    with open(path, 'r') as handle:
+        data = json.load(handle)
+
+    first, last = frame_range(duration)
+    shot_info = data.setdefault('shot_info', {})
+    before = (shot_info.get('start_frame'), shot_info.get('end_frame'))
+
+    if before == (first, last):
+        return False, before, before
+
+    shot_info['start_frame'] = first
+    shot_info['end_frame'] = last
+    shot_info['frame_count'] = duration
+    shot_info.setdefault('episode', ep)
+    shot_info.setdefault('sequence', seq)
+    shot_info.setdefault('shot', shot)
+
+    with open(path, 'w') as handle:
+        json.dump(data, handle, indent=4, sort_keys=True)
+        handle.write("\n")
+    return True, before, (first, last)
 
 
 def main(argv=None):
@@ -432,8 +486,9 @@ def main(argv=None):
     parser.add_argument('--ep', default=None, help='Only touch this episode, e.g. Ep02')
     parser.add_argument('--write', action='store_true',
                         help='Actually write the files (default is a dry run)')
-    parser.add_argument('--overwrite', action='store_true',
-                        help='Replace existing JSON files instead of skipping them')
+    parser.add_argument('--update-existing', action='store_true',
+                        help='Also correct the frame range inside files that already '
+                             'exist, leaving all their other Maya data untouched')
     args = parser.parse_args(argv)
 
     entries = parse_durations()
@@ -450,8 +505,9 @@ def main(argv=None):
         print("ERROR: no shots found under {} - is the drive mounted and --project right?".format(scene_root))
         return 1
 
-    written = skipped = missing = 0
+    written = skipped = missing = updated = 0
     ambiguous = []
+    conflicts = []
 
     for shot, duration in entries:
         locations = shot_dirs.get(shot)
@@ -467,15 +523,33 @@ def main(argv=None):
         json_path = os.path.join(shot_dir, ".{}_{}_{}.json".format(ep, seq, shot))
         first, last = frame_range(duration)
 
-        if os.path.exists(json_path) and not args.overwrite:
-            print("  EXISTS     {:<10} {}/{}  {}-{}  (use --overwrite to replace)".format(
-                shot, ep, seq, first, last))
-            skipped += 1
+        if os.path.exists(json_path):
+            # Shared with Maya: never rewrite the whole file, only the range.
+            with open(json_path, 'r') as handle:
+                existing = json.load(handle).get('shot_info', {})
+            have = (existing.get('start_frame'), existing.get('end_frame'))
+
+            if have == (first, last):
+                print("  OK         {:<10} {}/{}  {}-{}  (already correct)".format(
+                    shot, ep, seq, first, last))
+                skipped += 1
+            elif args.update_existing:
+                if args.write:
+                    update_existing(json_path, ep, seq, shot, duration)
+                print("  {:<10} {:<10} {}/{}  {}-{} -> {}-{}  (other Maya data kept)".format(
+                    "UPDATED" if args.write else "would update",
+                    shot, ep, seq, have[0], have[1], first, last))
+                updated += 1
+            else:
+                print("  CONFLICT   {:<10} {}/{}  file {}-{}, list {}-{}  "
+                      "(use --update-existing)".format(
+                          shot, ep, seq, have[0], have[1], first, last))
+                conflicts.append((shot, "{}/{}".format(ep, seq), have, (first, last)))
             continue
 
         if args.write:
             with open(json_path, 'w') as handle:
-                json.dump(build_payload(duration), handle, indent=4)
+                json.dump(build_payload(ep, seq, shot, duration), handle, indent=4, sort_keys=True)
                 handle.write("\n")
         print("  {:<10} {:<10} {}/{}  {}-{}  ({} frames)".format(
             "WROTE" if args.write else "would write", shot, ep, seq, first, last, duration))
@@ -489,7 +563,7 @@ def main(argv=None):
 
     print("\n{} {}, {} already present, {} not found, {} ambiguous".format(
         written, "written" if args.write else "to write", skipped, missing, len(ambiguous)))
-    if not args.write and written:
+    if not args.write and (written or updated):
         print("Nothing was written. Re-run with --write to apply.")
     return 0
 
