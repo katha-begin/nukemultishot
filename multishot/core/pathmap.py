@@ -128,13 +128,26 @@ def get_rules(refresh=False):
     if _cached_rules is not None and not refresh:
         return _cached_rules
 
-    rules = load_deadline_mappings()
-    source = 'Deadline path mapping'
-    if not rules:
-        rules = [(drive, mount) for drive, mount in DEFAULT_DRIVE_MAP.items()]
+    # Start from the built-in table, then let Deadline's rules override and
+    # extend it. Deadline is authoritative where it has an opinion, but a
+    # partial, unparseable or unavailable response must never LOSE a drive we
+    # already know about - that silently ships a Windows path to the farm.
+    merged = dict((drive, mount) for drive, mount in DEFAULT_DRIVE_MAP.items())
+
+    deadline_rules = load_deadline_mappings()
+    for source_prefix, destination in deadline_rules:
+        merged[source_prefix] = destination
+
+    if deadline_rules:
+        missing = [d for d in DEFAULT_DRIVE_MAP if d not in dict(deadline_rules)]
+        if missing:
+            source = 'Deadline path mapping + fallback for {}'.format(', '.join(sorted(missing)))
+        else:
+            source = 'Deadline path mapping'
+    else:
         source = 'built-in fallback table'
 
-    _cached_rules = sorted(rules, key=lambda rule: len(rule[0]), reverse=True)
+    _cached_rules = sorted(merged.items(), key=lambda rule: len(rule[0]), reverse=True)
     _cached_source = source
     return _cached_rules
 

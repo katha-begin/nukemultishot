@@ -455,10 +455,26 @@ def get_environment_variables():
     # Derived from where this package actually lives rather than hardcoded, so a
     # move (or a release/ vs development/ switch) does not silently keep pointing
     # the farm at the old checkout.
-    from ..core.pathmap import to_linux
+    from ..core.pathmap import to_linux, unmapped_drive
+
+    # Known-good location on the farm, used if the drive cannot be translated.
+    FARM_NUKE_PATH = '/mnt/ppr_dev_t/pipeline/development/nuke/nukemultishot'
 
     package_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    env_vars['NUKE_PATH'] = to_linux(package_root.replace('\\', '/'))
+    nuke_path = to_linux(package_root.replace('\\', '/'))
+
+    # Never ship a Windows path: the render node would search a drive that does
+    # not exist there, init.py would not load, and nothing would be path-mapped
+    # - which fails silently, with no error in the log, only missing files
+    # later. Verified in the wild: a job went out with
+    # NUKE_PATH=T:/pipeline/development/nuke/nukemultishot and no mapping ran.
+    if unmapped_drive(nuke_path) or (len(nuke_path) > 1 and nuke_path[1] == ':'):
+        print("Multishot: WARNING - could not translate {} to a farm path; "
+              "falling back to {}".format(nuke_path, FARM_NUKE_PATH))
+        nuke_path = FARM_NUKE_PATH
+
+    env_vars['NUKE_PATH'] = nuke_path
+    print("Multishot: NUKE_PATH for the farm = {}".format(nuke_path))
 
     # OCIO - only when the script actually asks for a specific config.
     #

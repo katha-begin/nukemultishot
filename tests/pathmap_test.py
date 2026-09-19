@@ -129,3 +129,63 @@ class TestFarmScriptPaths(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestRulesNeverLoseDrives(unittest.TestCase):
+    """A partial or failed Deadline response must not drop a known drive.
+
+    Regression: get_rules() replaced the built-in table with whatever Deadline
+    returned. When that response lacked T:, NUKE_PATH was derived as
+    "T:/pipeline/..." and shipped to the farm, where init.py then never loaded.
+    """
+
+    def setUp(self):
+        self._rules = pathmap._cached_rules
+        self._source = pathmap._cached_source
+        pathmap._cached_rules = None
+        pathmap._cached_source = None
+
+    def tearDown(self):
+        pathmap._cached_rules = self._rules
+        pathmap._cached_source = self._source
+
+    def _with_deadline(self, rules):
+        pathmap.load_deadline_mappings = lambda timeout=20: rules
+
+    def test_partial_deadline_response_keeps_other_drives(self):
+        real = pathmap.load_deadline_mappings
+        try:
+            self._with_deadline([("X:", "/mnt/igloo_ega_x")])   # T: missing
+            mapping = dict(pathmap.get_rules())
+            self.assertEqual(mapping["T:"], "/mnt/ppr_dev_t")   # fallback kept
+            self.assertEqual(mapping["X:"], "/mnt/igloo_ega_x") # Deadline wins
+            self.assertIn("fallback for", pathmap.get_rules_source())
+        finally:
+            pathmap.load_deadline_mappings = real
+
+    def test_deadline_overrides_the_builtin_value(self):
+        real = pathmap.load_deadline_mappings
+        try:
+            self._with_deadline([("T:", "/mnt/somewhere_else")])
+            self.assertEqual(dict(pathmap.get_rules())["T:"], "/mnt/somewhere_else")
+        finally:
+            pathmap.load_deadline_mappings = real
+
+    def test_no_deadline_falls_back_cleanly(self):
+        real = pathmap.load_deadline_mappings
+        try:
+            self._with_deadline([])
+            self.assertEqual(dict(pathmap.get_rules())["T:"], "/mnt/ppr_dev_t")
+            self.assertEqual(pathmap.get_rules_source(), "built-in fallback table")
+        finally:
+            pathmap.load_deadline_mappings = real
+
+    def test_package_root_always_translates(self):
+        real = pathmap.load_deadline_mappings
+        try:
+            self._with_deadline([("X:", "/mnt/igloo_ega_x")])   # T: missing
+            self.assertEqual(
+                pathmap.to_linux("T:/pipeline/development/nuke/nukemultishot"),
+                "/mnt/ppr_dev_t/pipeline/development/nuke/nukemultishot")
+        finally:
+            pathmap.load_deadline_mappings = real
