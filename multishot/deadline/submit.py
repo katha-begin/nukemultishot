@@ -329,6 +329,66 @@ def ensure_variables_before_submission():
         return False
 
 
+# Set by prepare_farm_copy() when a bypassed copy was written, and read by the
+# CallDeadlineCommand patch so the job renders that file instead of the
+# artist's original.
+_farm_copy_path = None
+
+
+def prepare_farm_copy(script_path):
+    """Write a farm copy with unavailable OFX nodes bypassed, if any are present.
+
+    Returns the copy's path, or None when the script needs no changes (in which
+    case the artist's own file is submitted, untouched, as usual).
+
+    The artist's script is never modified and their open session is never
+    touched - the copy is produced from the saved .nk text.
+    """
+    global _farm_copy_path
+    _farm_copy_path = None
+
+    try:
+        from .ofx_bypass import bypass_ofx_in_script_text, script_needs_bypass
+
+        with open(script_path, 'r') as handle:
+            text = handle.read()
+
+        if not script_needs_bypass(text):
+            return None
+
+        new_text, bypassed = bypass_ofx_in_script_text(text)
+
+        farm_dir = os.path.normpath(os.path.join(os.path.dirname(script_path), '..', 'farm'))
+        if not os.path.isdir(farm_dir):
+            os.makedirs(farm_dir)
+        base, ext = os.path.splitext(os.path.basename(script_path))
+        copy_path = os.path.join(farm_dir, base + '_farm' + ext).replace('\\', '/')
+
+        with open(copy_path, 'w') as handle:
+            handle.write(new_text)
+
+        print("\n" + "=" * 70)
+        print("MULTISHOT: Bypassed OFX nodes that are missing on the farm")
+        print("=" * 70)
+        for name in bypassed:
+            print("  bypassed (disable=true): {}".format(name))
+        print("  RSMB is not installed on the render nodes, so these would fail")
+        print("  the render outright. Bypassed nodes pass input 0 through, which")
+        print("  means NO MOTION BLUR from them in this render.")
+        print("  Your script is unchanged; submitting this copy instead:")
+        print("    {}".format(copy_path))
+        print("=" * 70 + "\n")
+
+        _farm_copy_path = copy_path
+        return copy_path
+
+    except Exception as e:
+        print("Multishot: WARNING - could not build farm copy ({}); "
+              "submitting the original script".format(e))
+        _farm_copy_path = None
+        return None
+
+
 def merge_job_environment(job_info_content, env_vars, drop_keys=()):
     """Merge env vars into an existing Deadline job info file's environment block.
 
@@ -366,6 +426,36 @@ def merge_job_environment(job_info_content, env_vars, drop_keys=()):
         kept_lines.pop()
 
     return kept_lines, env_lines
+
+
+def repoint_scene_file_in_plugin_info(plugin_info_file, scene_file):
+    """Point the job's SceneFile at our farm copy instead of the artist's script."""
+    try:
+        with open(plugin_info_file, 'r') as handle:
+            lines = handle.read().splitlines()
+    except Exception as e:
+        print("  Warning: could not read plugin info file: {}".format(e))
+        return False
+
+    updated = []
+    changed = False
+    for line in lines:
+        if line.strip().lower().startswith('scenefile='):
+            updated.append('SceneFile=' + scene_file)
+            changed = True
+        else:
+            updated.append(line)
+
+    if changed:
+        try:
+            with open(plugin_info_file, 'w') as handle:
+                handle.write('\n'.join(updated))
+                handle.write('\n')
+            print("  SceneFile -> {}".format(scene_file))
+        except Exception as e:
+            print("  Warning: could not update plugin info file: {}".format(e))
+            return False
+    return changed
 
 
 def disable_batch_mode_in_plugin_info(plugin_info_file):
@@ -606,6 +696,9 @@ def _patch_deadline_submission():
                                 and plugin_info_file.endswith('.job')
                                 and os.path.exists(plugin_info_file)):
                             disable_batch_mode_in_plugin_info(plugin_info_file)
+                            if _farm_copy_path:
+                                repoint_scene_file_in_plugin_info(
+                                    plugin_info_file, _farm_copy_path)
 
                         print("=" * 70 + "\n")
 
@@ -775,7 +868,12 @@ def submit_to_deadline():
             # For this to work the farm job must carry NUKE_PATH; that is what
             # _patch_deadline_submission() below injects.
 
-            # STEP 2: Patch the submission to add our environment variables
+            # STEP 2: If the comp uses OFX plugins the farm does not have
+            # (RSMB), write a copy with them bypassed and submit that instead.
+            # The artist's script is left exactly as they saved it.
+            prepare_farm_copy(script_path)
+
+            # STEP 3: Patch the submission to add our environment variables
             _patch_deadline_submission()
 
             # STEP 3: Open submission dialog
