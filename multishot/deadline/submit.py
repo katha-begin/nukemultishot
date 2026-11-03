@@ -329,11 +329,15 @@ def ensure_variables_before_submission():
         return False
 
 
-def merge_job_environment(job_info_content, env_vars, drop_keys=()):
+def merge_job_environment(job_info_content, env_vars, drop_keys=(), translate=None):
     """Merge env vars into an existing Deadline job info file's environment block.
 
     Returns (kept_lines, env_lines) where env_lines is a fresh, contiguous
     EnvironmentKeyValue block plus UseJobEnvironmentOnly.
+
+    ``translate``, if given, is applied to every value that is a Windows drive
+    path - including entries the studio submitter wrote, which we did not
+    produce and must not ship to a Linux worker as "T:/...".
 
     Deadline stops reading EnvironmentKeyValue entries at the first missing
     index, so the block must be renumbered from 0 with no gaps - appending or
@@ -357,6 +361,12 @@ def merge_job_environment(job_info_content, env_vars, drop_keys=()):
     merged.update(env_vars)
     for key in drop_keys:
         merged.pop(key, None)
+
+    if translate is not None:
+        from ..core.pathmap import is_windows_path
+        for key, value in merged.items():
+            if is_windows_path(value):
+                merged[key] = translate(value)
 
     env_lines = ["EnvironmentKeyValue{}={}={}".format(index, key, merged[key])
                  for index, key in enumerate(sorted(merged))]
@@ -455,7 +465,7 @@ def get_environment_variables():
     # Derived from where this package actually lives rather than hardcoded, so a
     # move (or a release/ vs development/ switch) does not silently keep pointing
     # the farm at the old checkout.
-    from ..core.pathmap import to_linux, unmapped_drive
+    from ..core.pathmap import to_linux, unmapped_drive, is_windows_path
 
     # Known-good location on the farm, used if the drive cannot be translated.
     FARM_NUKE_PATH = '/mnt/ppr_dev_t/pipeline/development/nuke/nukemultishot'
@@ -496,8 +506,14 @@ def get_environment_variables():
         ocio_knob = nuke.root().knob('customOCIOConfigPath')
         if ocio_knob and ocio_knob.value():
             ocio_path = to_linux(ocio_knob.value())
-            env_vars['OCIO'] = ocio_path
-            print("Multishot: OCIO from script -> {}".format(ocio_path))
+            if is_windows_path(ocio_path):
+                # Same rule as NUKE_PATH: never ship a drive letter to a Linux
+                # render node. Leave the job's existing (Linux) OCIO in place.
+                print("Multishot: WARNING - could not translate OCIO {} to a farm "
+                      "path; not overriding the job's OCIO".format(ocio_path))
+            else:
+                env_vars['OCIO'] = ocio_path
+                print("Multishot: OCIO from script -> {}".format(ocio_path))
         else:
             print("Multishot: script sets no customOCIOConfigPath; leaving OCIO "
                   "unset so the script's own colour management is used")
@@ -586,8 +602,10 @@ def _patch_deadline_submission():
                         if not script_declares_ocio_config():
                             drop_keys.append('OCIO')
 
+                        from ..core.pathmap import to_linux
                         kept_lines, env_lines = merge_job_environment(
-                            job_info_content, env_vars, drop_keys=drop_keys)
+                            job_info_content, env_vars, drop_keys=drop_keys,
+                            translate=to_linux)
 
                         for env_line in env_lines:
                             print("  {}".format(env_line))

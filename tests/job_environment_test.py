@@ -133,3 +133,20 @@ class TestDisableBatchMode(unittest.TestCase):
         content = open(path).read()
         for entry in ("SceneFile=/x/y.nk", "WriteNode=W1", "Version=16.0"):
             self.assertIn(entry, content)
+
+
+class TestWindowsValuesTranslated(unittest.TestCase):
+    def test_existing_windows_ocio_is_translated(self):
+        job = STUDIO_JOB_INFO.replace(
+            "OCIO=/mnt/ppr_dev_t/pipeline", "OCIO=T:/pipeline")
+        to_linux = lambda p: "/mnt/ppr_dev_t" + p[2:]
+        _, env_lines = merge_job_environment(job, {}, translate=to_linux)
+        self.assertEqual(
+            as_dict(env_lines)["OCIO"],
+            "/mnt/ppr_dev_t/pipeline/ocio/aces_2.0/studio-config.ocio")
+
+    def test_no_translate_leaves_values_alone(self):
+        job = STUDIO_JOB_INFO.replace(
+            "OCIO=/mnt/ppr_dev_t/pipeline", "OCIO=T:/pipeline")
+        _, env_lines = merge_job_environment(job, {})
+        self.assertTrue(as_dict(env_lines)["OCIO"].startswith("T:/"))

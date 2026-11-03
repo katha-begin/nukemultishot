@@ -189,3 +189,37 @@ class TestRulesNeverLoseDrives(unittest.TestCase):
                 "/mnt/ppr_dev_t/pipeline/development/nuke/nukemultishot")
         finally:
             pathmap.load_deadline_mappings = real
+
+
+class TestWindowsDestinationRulesIgnored(unittest.TestCase):
+    """A Deadline rule that maps to a drive letter must not replace a Linux one.
+
+    Regression: a job reached the farm with OCIO=T:/pipeline/ocio/... because
+    the T: entry had been overridden by a rule with a Windows destination.
+    """
+
+    def setUp(self):
+        self._rules = pathmap._cached_rules
+        self._source = pathmap._cached_source
+        self._load = pathmap.load_deadline_mappings
+        pathmap._cached_rules = None
+        pathmap._cached_source = None
+
+    def tearDown(self):
+        pathmap._cached_rules = self._rules
+        pathmap._cached_source = self._source
+        pathmap.load_deadline_mappings = self._load
+
+    def test_windows_destination_is_dropped(self):
+        pathmap.load_deadline_mappings = lambda timeout=20: [("T:", "T:")]
+        self.assertEqual(
+            pathmap.to_linux("T:/pipeline/ocio/aces_2.0/config.ocio"),
+            "/mnt/ppr_dev_t/pipeline/ocio/aces_2.0/config.ocio")
+
+    def test_is_windows_path(self):
+        self.assertTrue(pathmap.is_windows_path("T:/a"))
+        self.assertTrue(pathmap.is_windows_path("t:\a"))
+        self.assertTrue(pathmap.is_windows_path("T:"))
+        self.assertFalse(pathmap.is_windows_path("/mnt/ppr_dev_t/a"))
+        self.assertFalse(pathmap.is_windows_path(""))
+        self.assertFalse(pathmap.is_windows_path(None))

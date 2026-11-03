@@ -48,6 +48,11 @@ def _normalise_prefix(value):
     return value.strip().replace('\\', '/').rstrip('/')
 
 
+def is_windows_path(path):
+    """True for a drive-letter path ("T:", "T:/x", "t:\\x") - never valid on the farm."""
+    return bool(path) and len(path) >= 2 and path[1] == ':' and path[0].isalpha()
+
+
 def _find_deadline_command():
     """Locate deadlinecommand, or None if the Deadline client is not installed."""
     candidates = []
@@ -134,7 +139,14 @@ def get_rules(refresh=False):
     # already know about - that silently ships a Windows path to the farm.
     merged = dict((drive, mount) for drive, mount in DEFAULT_DRIVE_MAP.items())
 
-    deadline_rules = load_deadline_mappings()
+    # Only rules that land on a Linux mount are any use here - the farm is
+    # Linux. A rule whose destination is itself a drive letter (e.g. a
+    # Windows->Windows mapping, or "T:/ --> T:/") would replace our T: entry
+    # with a no-op and ship "T:/..." to the farm untranslated - verified with
+    # OCIO=T:/pipeline/ocio/... on a render node.
+    deadline_rules = [(source_prefix, destination)
+                      for source_prefix, destination in load_deadline_mappings()
+                      if not is_windows_path(destination)]
     for source_prefix, destination in deadline_rules:
         merged[source_prefix] = destination
 

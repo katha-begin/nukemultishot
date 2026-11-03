@@ -37,19 +37,47 @@ def install_path_mapping():
 
 install_path_mapping()
 
-# DEBUG: Print OCIO environment variable immediately when init.py loads
+
+def fix_ocio_env():
+    """Translate a Windows OCIO path to its Linux mount on the render node.
+
+    The filenameFilter covers paths inside the .nk, but not environment
+    variables. A job carrying OCIO=T:/pipeline/ocio/... (submitted without the
+    Multishot patch, or from an older submitter) would otherwise point Nuke at a
+    drive that does not exist on Linux. Runs before the script is opened, so
+    Nuke picks up the corrected config.
+    """
+    import platform
+    ocio_env = os.environ.get('OCIO', '')
+    if platform.system() != 'Linux' or not ocio_env:
+        return
+    try:
+        from multishot.core.pathmap import to_linux, is_windows_path
+        if is_windows_path(ocio_env):
+            mapped = to_linux(ocio_env)
+            if mapped != ocio_env:
+                os.environ['OCIO'] = mapped
+                print("Multishot: OCIO {} -> {}".format(ocio_env, mapped))
+    except Exception as e:
+        print("Multishot: WARNING - could not translate OCIO: {}".format(e))
+
+
+fix_ocio_env()
+
+# Report the OCIO config in effect. Never print "ERROR:" here: Deadline's Nuke
+# plugin fails the task on any stdout line containing it, so a diagnostic that
+# says ERROR kills a render that Nuke itself might have completed.
 print("\n" + "=" * 80)
-print("MULTISHOT DEBUG: Checking OCIO environment variable")
+print("MULTISHOT: OCIO environment variable")
 print("=" * 80)
-ocio_env = os.environ.get('OCIO', 'NOT SET')
-print("OCIO environment variable: {}".format(ocio_env))
-if ocio_env != 'NOT SET':
+ocio_env = os.environ.get('OCIO', '')
+if ocio_env:
     if os.path.exists(ocio_env):
-        print("  -> OCIO config file EXISTS: {}".format(ocio_env))
+        print("  OCIO config found: {}".format(ocio_env))
     else:
-        print("  -> ERROR: OCIO config file DOES NOT EXIST: {}".format(ocio_env))
+        print("  WARNING - OCIO config not found: {}".format(ocio_env))
 else:
-    print("  -> WARNING: OCIO environment variable is NOT SET!")
+    print("  OCIO not set; using the script's own colour management")
 print("=" * 80 + "\n")
 
 def ensure_variables_for_batch_mode():
